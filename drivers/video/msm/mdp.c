@@ -2485,6 +2485,14 @@ static int mdp_on(struct platform_device *pdev)
 		mfd->cont_splash_done = 1;
 	}
 
+#ifdef CONFIG_MACH_MSM8960_D1L_KR
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
+	ret = panel_next_on(pdev);
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+#endif
+
+
 	if (mdp_rev >= MDP_REV_40) {
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 		mdp_clk_ctrl(1);
@@ -2521,10 +2529,12 @@ static int mdp_on(struct platform_device *pdev)
 		atomic_set(&vsync_cntrl.suspend, 1);
 	}
 
+#ifndef CONFIG_MACH_MSM8960_D1L_KR
     mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
     ret = panel_next_on(pdev);
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+#endif
 
 	mdp_histogram_ctrl_all(TRUE);
 
