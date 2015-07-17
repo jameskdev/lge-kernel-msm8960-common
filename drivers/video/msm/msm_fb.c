@@ -100,6 +100,8 @@ int vsync_mode = 1;
 static int saved_backlight_level = 169;
 #elif defined(CONFIG_MACH_MSM8960_VU2)
 static int saved_backlight_level = 157;
+#elif defined(CONFIG_MACH_MSM8960_D1L_KR)
+static int saved_backlight_level = 150;
 #else
 static int saved_backlight_level = 71;
 #endif
