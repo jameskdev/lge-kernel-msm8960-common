@@ -244,7 +244,7 @@ struct platform_device msm8960_device_acpuclk = {
 	.id		= -1,
 };
 
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)    //LGE
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)    //LGE
 struct platform_device msm8960ab_device_acpuclk = {
 	.name		= "acpuclk-8960ab",
 	.id		= -1,
@@ -894,7 +894,7 @@ static struct msm_bus_scale_pdata vidc_bus_client_data = {
 	.name = "vidc",
 };
 
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)   //LGE
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)   //LGE
 static struct msm_bus_vectors vidc_pro_init_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_VIDEO_ENC,
@@ -2763,7 +2763,7 @@ static struct fs_driver_data gfx3d_fs_data = {
 	.bus_port0 = MSM_BUS_MASTER_GRAPHICS_3D,
 };
 
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)   //LGE
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)   //LGE
 static struct fs_driver_data gfx3d_fs_data_8960ab = {
 	.clks = (struct fs_clk_data[]){
 		{ .name = "core_clk", .reset_rate = 27000000 },
@@ -2826,7 +2826,7 @@ static struct fs_driver_data ved_fs_data = {
 	.bus_port1 = MSM_BUS_MASTER_HD_CODEC_PORT1,
 };
 
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)   //LGE
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)   //LGE
 static struct fs_driver_data ved_fs_data_8960ab = {
 	.clks = (struct fs_clk_data[]){
 		{ .name = "core_clk" },
@@ -2872,7 +2872,7 @@ struct platform_device *msm8960_footswitch[] __initdata = {
 };
 unsigned msm8960_num_footswitch __initdata = ARRAY_SIZE(msm8960_footswitch);
 
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)   //LGE
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)   //LGE
 struct platform_device *msm8960ab_footswitch[] __initdata = {
 	FS_8X60(FS_MDP,    "vdd",	"mdp.0",	&mdp_fs_data),
 	FS_8X60(FS_ROT,    "vdd",	"msm_rotator.0", &rot_fs_data),
@@ -4783,7 +4783,7 @@ struct platform_device *msm8960_vidc_device[] __initdata = {
 
 void __init msm8960_add_vidc_device(void)
 {
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)   //LGE
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)   //LGE
 	if (cpu_is_msm8960ab()) {
 		struct msm_vidc_platform_data *pdata;
 		pdata = (struct msm_vidc_platform_data *)
