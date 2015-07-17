@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +14,7 @@
 #include <linux/regulator/pm8xxx-regulator.h>
 #include <linux/regulator/msm-gpio-regulator.h>
 #include <mach/rpm-regulator.h>
+#include <mach/socinfo.h>
 
 #include "board-d1l.h"
 #include CONFIG_BOARD_HEADER_FILE
@@ -77,6 +78,7 @@ VREG_CONSUMERS(L11) = {
 	REGULATOR_SUPPLY("cam2_vana",		"4-006e"),
 #else
 	REGULATOR_SUPPLY("cam_vana",		"4-001a"),
+	REGULATOR_SUPPLY("cam_vana",		"4-0010"),
 	REGULATOR_SUPPLY("cam_vana",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vana",		"4-0048"),
 	REGULATOR_SUPPLY("cam_vana",		"4-0020"),
@@ -90,6 +92,7 @@ VREG_CONSUMERS(L12) = {
 	REGULATOR_SUPPLY("cam2_vdig",		"4-006e"),
 #endif
 	REGULATOR_SUPPLY("cam_vdig",		"4-001a"),
+	REGULATOR_SUPPLY("cam_vdig",		"4-0010"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-0048"),
 	REGULATOR_SUPPLY("cam_vdig",		"4-0020"),
@@ -98,6 +101,7 @@ VREG_CONSUMERS(L12) = {
 VREG_CONSUMERS(L14) = {
 	REGULATOR_SUPPLY("8921_l14",		NULL),
 	REGULATOR_SUPPLY("pa_therm",		"pm8xxx-adc"),
+	REGULATOR_SUPPLY("vreg_xoadc",		"pm8921-charger"),
 };
 VREG_CONSUMERS(L15) = {
 	REGULATOR_SUPPLY("8921_l15",		NULL),
@@ -108,6 +112,7 @@ VREG_CONSUMERS(L16) = {
 	REGULATOR_SUPPLY("cam1_vaf",	"4-000d"),
 #endif
 	REGULATOR_SUPPLY("cam_vaf",		"4-001a"),
+	REGULATOR_SUPPLY("cam_vaf",		"4-0010"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-0048"),
 	REGULATOR_SUPPLY("cam_vaf",		"4-0020"),
@@ -115,6 +120,9 @@ VREG_CONSUMERS(L16) = {
 };
 VREG_CONSUMERS(L17) = {
 	REGULATOR_SUPPLY("8921_l17",		NULL),
+#ifdef CONFIG_MACH_MSM8960_VU2
+	REGULATOR_SUPPLY("8921_l17_touch",		NULL),
+#endif
 };
 VREG_CONSUMERS(L18) = {
 	REGULATOR_SUPPLY("8921_l18",		NULL),
@@ -162,6 +170,9 @@ VREG_CONSUMERS(L28) = {
 };
 VREG_CONSUMERS(L29) = {
 	REGULATOR_SUPPLY("8921_l29",		NULL),
+#ifdef CONFIG_MACH_MSM8960_VU2
+	REGULATOR_SUPPLY("8921_l29_touch",		NULL),
+#endif
 };
 VREG_CONSUMERS(S1) = {
 	REGULATOR_SUPPLY("8921_s1",		NULL),
@@ -199,10 +210,12 @@ VREG_CONSUMERS(S4) = {
 VREG_CONSUMERS(S5) = {
 	REGULATOR_SUPPLY("8921_s5",		NULL),
 	REGULATOR_SUPPLY("krait0",		"acpuclk-8960"),
+	REGULATOR_SUPPLY("krait0",		"acpuclk-8960ab"),
 };
 VREG_CONSUMERS(S6) = {
 	REGULATOR_SUPPLY("8921_s6",		NULL),
 	REGULATOR_SUPPLY("krait1",		"acpuclk-8960"),
+	REGULATOR_SUPPLY("krait1",		"acpuclk-8960ab"),
 };
 VREG_CONSUMERS(S7) = {
 	REGULATOR_SUPPLY("8921_s7",		NULL),
@@ -233,14 +246,22 @@ VREG_CONSUMERS(LVS5) = {
 	REGULATOR_SUPPLY("cam2_vio",	"4-006e"),
 #endif
 	REGULATOR_SUPPLY("cam_vio",		"4-001a"),
+	REGULATOR_SUPPLY("cam_vio",		"4-0010"),
 	REGULATOR_SUPPLY("cam_vio",		"4-006c"),
 	REGULATOR_SUPPLY("cam_vio",		"4-0048"),
 	REGULATOR_SUPPLY("cam_vio",		"4-0020"),
 	REGULATOR_SUPPLY("cam_vio",		"4-0034"),
 };
+/* This mapping is used for CDP only. */
+VREG_CONSUMERS(CDP_LVS6) = {
+	REGULATOR_SUPPLY("8921_lvs6",		NULL),
+	REGULATOR_SUPPLY("vdd-io",		"spi0.0"),
+};
+/* This mapping is used for non-CDP targets only. */
 VREG_CONSUMERS(LVS6) = {
 	REGULATOR_SUPPLY("8921_lvs6",		NULL),
-	REGULATOR_SUPPLY("vdd_io",		"spi0.0"),
+	REGULATOR_SUPPLY("vdd-io",		"spi0.0"),
+	REGULATOR_SUPPLY("vdd-phy",		"spi0.0"),
 };
 VREG_CONSUMERS(LVS7) = {
 	REGULATOR_SUPPLY("8921_lvs7",		NULL),
@@ -260,7 +281,7 @@ VREG_CONSUMERS(EXT_5V) = {
 };
 VREG_CONSUMERS(EXT_L2) = {
 	REGULATOR_SUPPLY("ext_l2",		NULL),
-	REGULATOR_SUPPLY("vdd_phy",		"spi0.0"),
+	REGULATOR_SUPPLY("vdd-phy",		"spi0.0"),
 };
 VREG_CONSUMERS(EXT_3P3V) = {
 	REGULATOR_SUPPLY("ext_3p3v",		NULL),
@@ -617,6 +638,17 @@ static struct rpm_regulator_consumer_mapping
 	RPM_REG_MAP(S8,  0, 1, "krait0_s8",  "acpuclk-8960"),
 	RPM_REG_MAP(S8,  0, 2, "krait1_s8",  "acpuclk-8960"),
 	RPM_REG_MAP(S8,  0, 6, "l2_s8",      "acpuclk-8960"),
+
+	RPM_REG_MAP(L23, 0, 1, "krait0_l23", "acpuclk-8960ab"),
+	RPM_REG_MAP(L23, 0, 2, "krait1_l23", "acpuclk-8960ab"),
+	RPM_REG_MAP(L23, 0, 6, "l2_l23",     "acpuclk-8960ab"),
+	RPM_REG_MAP(L24, 0, 1, "krait0_mem", "acpuclk-8960ab"),
+	RPM_REG_MAP(L24, 0, 2, "krait1_mem", "acpuclk-8960ab"),
+	RPM_REG_MAP(S3,  0, 1, "krait0_dig", "acpuclk-8960ab"),
+	RPM_REG_MAP(S3,  0, 2, "krait1_dig", "acpuclk-8960ab"),
+	RPM_REG_MAP(S8,  0, 1, "krait0_s8",  "acpuclk-8960ab"),
+	RPM_REG_MAP(S8,  0, 2, "krait1_s8",  "acpuclk-8960ab"),
+	RPM_REG_MAP(S8,  0, 6, "l2_s8",      "acpuclk-8960ab"),
 };
 
 struct rpm_regulator_platform_data msm_rpm_regulator_pdata __devinitdata = {
@@ -628,3 +660,37 @@ struct rpm_regulator_platform_data msm_rpm_regulator_pdata __devinitdata = {
 	.consumer_map		= msm_rpm_regulator_consumer_mapping,
 	.consumer_map_len = ARRAY_SIZE(msm_rpm_regulator_consumer_mapping),
 };
+
+/*
+ * Fix up regulator consumer data that moves to a different regulator based on
+ * the current target.
+ */
+void __init configure_msm8960_power_grid(void)
+{
+	static struct rpm_regulator_init_data *rpm_data;
+	int i;
+
+	if (machine_is_msm8960_cdp() || cpu_is_msm8960ab()) {
+		/* Only modify LVS6 consumers for CDP targets. */
+		for (i = 0; i < ARRAY_SIZE(msm_rpm_regulator_init_data); i++) {
+			rpm_data = &msm_rpm_regulator_init_data[i];
+			if (machine_is_msm8960_cdp() &&
+				rpm_data->id == RPM_VREG_ID_PM8921_LVS6) {
+				rpm_data->init_data.consumer_supplies
+					= vreg_consumers_CDP_LVS6;
+				rpm_data->init_data.num_consumer_supplies
+					= ARRAY_SIZE(vreg_consumers_CDP_LVS6);
+			}
+			if (cpu_is_msm8960ab() &&
+				rpm_data->id == RPM_VREG_ID_PM8921_S7) {
+				rpm_data->init_data.constraints.min_uV =
+								1275000;
+				rpm_data->init_data.constraints.max_uV =
+								1275000;
+				rpm_data->init_data.constraints.input_uV =
+								1275000;
+				rpm_data->default_uV = 1275000;
+			}
+		}
+	}
+}

@@ -40,7 +40,7 @@
 #ifdef CONFIG_USB_MSM_OTG_72K
 static struct msm_otg_platform_data msm_otg_pdata;
 #else
-#ifdef CONFIG_USB_G_LGE_ANDROID
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
 static int wr_phy_init_seq[] = {
 	0x44, 0x80, /* set VBUS valid threshold
 			and disconnect valid threshold */
@@ -186,7 +186,7 @@ static struct platform_device android_usb_device = {
 	},
 };
 
-#ifdef CONFIG_USB_G_LGE_ANDROID
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
 static int get_factory_cable(void)
 {
 	struct chg_cable_info info;
@@ -255,6 +255,16 @@ struct platform_device lge_android_usb_device = {
 };
 #endif
 
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+static struct platform_device lg_diag_event_device = {
+        .name = "lg_diag_event",
+        .id = -1,
+        .dev    =       {
+                .platform_data = 0,
+                                },
+};
+#endif
+
 static struct platform_device *usb_devices[] __initdata = {
 #ifdef CONFIG_USB_MSM_OTG
 	&msm8960_device_otg,
@@ -262,10 +272,14 @@ static struct platform_device *usb_devices[] __initdata = {
 	&msm_device_hsusb_host,
 #endif
     &msm_device_hsic_host,
-#ifdef CONFIG_USB_G_LGE_ANDROID
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
 	&lge_android_usb_device,
 #endif
     &android_usb_device,
+
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+	&lg_diag_event_device,
+#endif
 };
 
 void __init lge_add_usb_devices(void)

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,8 +13,9 @@
 
 #include <asm/mach-types.h>
 #include <linux/gpio.h>
-#include <mach/board.h>
+#include <mach/camera.h>
 #include <mach/msm_bus_board.h>
+#include <mach/socinfo.h>
 #include <mach/gpiomux.h>
 #include "devices.h"
 #include "board-d1l.h"
@@ -30,6 +31,7 @@
  *
  */
 #if !defined(CONFIG_MACH_LGE)
+#ifdef CONFIG_MSM_CAMERA_FLASH
 #if (defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)) && \
 	defined(CONFIG_I2C)
 
@@ -46,6 +48,7 @@ static struct msm_cam_expander_info cam_expander_info[] = {
 		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
 	},
 };
+#endif
 #endif
 #endif /* QCT Original */
 
@@ -195,6 +198,30 @@ static struct msm_gpiomux_config msm8960_cam_2d_configs[] = {
 		.settings = {
 			[GPIOMUX_ACTIVE]    = &cam_settings[3],
 			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+		{
+		.gpio = 53, /* VCM */
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[2],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+};
+
+static struct msm_gpiomux_config msm8960_cam_2d_configs_sglte[] = {
+	{
+		.gpio = 20,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[3],
+			[GPIOMUX_SUSPENDED] = &cam_settings[8],
+		},
+	},
+	{
+		.gpio = 21,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[3],
+			[GPIOMUX_SUSPENDED] = &cam_settings[8],
 		},
 	},
 };
@@ -392,6 +419,74 @@ static struct msm_bus_vectors cam_zsl_vectors[] = {
 	},
 };
 
+static struct msm_bus_vectors cam_video_ls_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 348192000,
+		.ib  = 617103360,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 206807040,
+		.ib  = 488816640,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 540000000,
+		.ib  = 1350000000,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+};
+
+static struct msm_bus_vectors cam_dual_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 600000000,
+		.ib  = 2656000000UL,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 206807040,
+		.ib  = 488816640,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 540000000,
+		.ib  = 1350000000,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 43200000,
+		.ib  = 69120000,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 43200000,
+		.ib  = 69120000,
+	},
+};
+
+
+
 static struct msm_bus_paths cam_bus_client_config[] = {
 	{
 		ARRAY_SIZE(cam_init_vectors),
@@ -412,6 +507,14 @@ static struct msm_bus_paths cam_bus_client_config[] = {
 	{
 		ARRAY_SIZE(cam_zsl_vectors),
 		cam_zsl_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_video_ls_vectors),
+		cam_video_ls_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_dual_vectors),
+		cam_dual_vectors,
 	},
 };
 
@@ -439,7 +542,7 @@ static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
 	},
 };
 
-static struct camera_vreg_t msm_8960_back_cam_vreg[] = {
+static struct camera_vreg_t msm_8960_cam_vreg[] = {
 	{"cam1_vdig", REG_LDO, 1200000, 1200000, 105000},
 	{"cam1_vio", REG_VS, 0, 0, 0},
 	{"cam1_vana", REG_LDO, 2800000, 2850000, 85600},
@@ -558,8 +661,8 @@ static struct msm_camera_csi_lane_params imx111_csi_lane_params = {
 
 static struct msm_camera_sensor_platform_info sensor_board_info_imx111 = {
 	.mount_angle	= 90,
-	.cam_vreg = msm_8960_back_cam_vreg,
-	.num_vreg = ARRAY_SIZE(msm_8960_back_cam_vreg),
+	.cam_vreg = msm_8960_cam_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_cam_vreg),
 	.gpio_conf = &msm_8960_back_cam_gpio_conf,
 	.csi_lane_params = &imx111_csi_lane_params,
 };
@@ -628,6 +731,36 @@ static struct msm_camera_sensor_info msm_camera_sensor_imx119_data = {
  *
  */
 #if !defined(CONFIG_MACH_LGE)
+
+
+static struct msm_camera_sensor_flash_data flash_imx135 = {
+	.flash_type = MSM_CAMERA_FLASH_NONE,
+};
+
+static struct msm_camera_csi_lane_params imx135_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0xF,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_imx135 = {
+	.mount_angle = 90,
+	.cam_vreg = msm_8960_cam_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_cam_vreg),
+	.gpio_conf = &msm_8960_back_cam_gpio_conf,
+	.csi_lane_params = &imx135_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_imx135_data = {
+	.sensor_name = "imx135",
+	.pdata = &msm_camera_csi_device_data[0],
+	.flash_data = &flash_imx135,
+	.sensor_platform_info = &sensor_board_info_imx135,
+	.csi_if = 1,
+	.camera_type = BACK_CAMERA_2D,
+	.sensor_type = BAYER_SENSOR,
+	.actuator_info = &msm_act_main_cam_1_info,
+};
+
 static struct pm8xxx_mpp_config_data privacy_light_on_config = {
 	.type		= PM8XXX_MPP_TYPE_SINK,
 	.level		= PM8XXX_MPP_CS_OUT_5MA,
@@ -661,6 +794,18 @@ static struct platform_device msm_camera_server = {
 
 void __init msm8960_init_cam(void)
 {
+	pr_err("%s: E\n", __func__);
+	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE) {
+		msm_8960_front_cam_gpio_conf.cam_gpiomux_conf_tbl =
+			msm8960_cam_2d_configs_sglte;
+		msm_8960_front_cam_gpio_conf.cam_gpiomux_conf_tbl_size =
+			ARRAY_SIZE(msm8960_cam_2d_configs_sglte);
+		msm_8960_back_cam_gpio_conf.cam_gpiomux_conf_tbl =
+			msm8960_cam_2d_configs_sglte;
+		msm_8960_back_cam_gpio_conf.cam_gpiomux_conf_tbl_size =
+			ARRAY_SIZE(msm8960_cam_2d_configs_sglte);
+	}
+
 	msm_gpiomux_install(msm8960_cam_common_configs,
 			ARRAY_SIZE(msm8960_cam_common_configs));
 
@@ -668,6 +813,7 @@ void __init msm8960_init_cam(void)
 	if (machine_is_msm8960_cdp()) {
 		msm_gpiomux_install(msm8960_cdp_flash_configs,
 			ARRAY_SIZE(msm8960_cdp_flash_configs));
+#ifdef CONFIG_MSM_CAMERA_FLASH
 		msm_flash_src._fsrc.ext_driver_src.led_en =
 			GPIO_CAM_GP_LED_EN1;
 		msm_flash_src._fsrc.ext_driver_src.led_flash_en =
@@ -677,6 +823,7 @@ void __init msm8960_init_cam(void)
 		msm_flash_src._fsrc.ext_driver_src.expander_info =
 			cam_expander_info;
 		#endif
+#endif
 	}
 #endif
 

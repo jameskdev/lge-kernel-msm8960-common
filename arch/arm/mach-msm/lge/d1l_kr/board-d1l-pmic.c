@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -130,7 +130,6 @@ PM8XXX_GPIO_OUTPUT(17, 0),					  /* DMB_ANT_SEL_INN */
 	PM8XXX_GPIO_DISABLE(22),			 /* Disable NFC */
 
 	PM8XXX_GPIO_INPUT(26,	    PM_GPIO_PULL_UP_30), /* SD_CARD_DET_N */
-	PM8XXX_GPIO_OUTPUT(43, 1),                       /* DISP_RESET_N */
 
 #ifdef CONFIG_LGE_AUDIO
 /* add by ehgrace.kim@lge.com for headset */
@@ -146,7 +145,7 @@ PM8XXX_GPIO_OUTPUT(17, 0),					  /* DMB_ANT_SEL_INN */
 	PM8XXX_GPIO_OUTPUT_FUNC(25, 0, PM_GPIO_FUNC_2),	 /* TN_CLK */
 #endif
 	/* TABLA CODEC RESET */
-	PM8XXX_GPIO_OUTPUT_STRENGTH(34, 1, PM_GPIO_STRENGTH_MED)
+	PM8XXX_GPIO_OUTPUT_STRENGTH(34, 0, PM_GPIO_STRENGTH_MED)
 };
 
 /* Initial PM8921 MPP configurations */
@@ -303,8 +302,8 @@ static const unsigned int keymap_b[] = { LGE_KEY_MAP_B };
 static const unsigned int keymap[] = {
 	KEY(0, 0, KEY_VOLUMEUP),
 	KEY(0, 1, KEY_VOLUMEDOWN),
-	KEY(0, 2, KEY_CAMERA_SNAPSHOT),
-	KEY(0, 3, KEY_CAMERA_FOCUS),
+	KEY(0, 2, KEY_CAMERA_FOCUS),
+	KEY(0, 3, KEY_CAMERA_SNAPSHOT),
 };
 #endif
 
@@ -446,25 +445,6 @@ static const unsigned int keymap_sim[] = {
 	KEY(0, 3, KEY_CAMERA_FOCUS),
 };
 
-static struct matrix_keymap_data keymap_data_sim = {
-	.keymap_size    = ARRAY_SIZE(keymap_sim),
-	.keymap         = keymap_sim,
-};
-
-static struct pm8xxx_keypad_platform_data keypad_data_sim = {
-	.input_name             = "keypad_8960",
-	.input_phys_device      = "keypad_8960/input0",
-	.num_rows               = 12,
-	.num_cols               = 8,
-	.rows_gpio_start	= PM8921_GPIO_PM_TO_SYS(9),
-	.cols_gpio_start	= PM8921_GPIO_PM_TO_SYS(1),
-	.debounce_ms            = 15,
-	.scan_delay_ms          = 32,
-	.row_hold_ns            = 91500,
-	.wakeup                 = 1,
-	.keymap_data            = &keymap_data_sim,
-};
-
 static int pm8921_therm_mitigation[] = {
 	1100,
 	700,
@@ -482,12 +462,10 @@ static int pm8921_therm_mitigation[] = {
 
 static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 #ifdef CONFIG_LGE_PM_435V_BATT
-	.safety_time			= 480,
 	.update_time			= 60000,
 	.max_voltage			= MAX_VOLTAGE_MV,
 	.min_voltage			= 3500,
 #else
-	.safety_time			= 180,
 	.update_time			= 1,
 	.max_voltage			= MAX_VOLTAGE_MV,
 	.min_voltage			= 3200,
@@ -495,8 +473,16 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 #ifndef CONFIG_LGE_PM
 	.uvd_thresh_voltage	= 4050,
 #endif /* QCT ORIGIN */
+	.alarm_low_mv		= 3400,
+	.alarm_high_mv		= 4000,
+
 	.resume_voltage_delta	= 100,
+	.resume_charge_percent	= 99,
 	.term_current			= CHG_TERM_MA,
+
+/* the voltage of charger_gone_irq */
+.vin_min			= 4350,
+
 #ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
 	.cool_temp			= 0,	/* from 10, */
 	.warm_temp			= 0,	/* from 40, */
@@ -508,6 +494,7 @@ static struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.temp_level_3		= 42,
 	.temp_level_4		= -5,
 	.temp_level_5		= -10,
+	.btc_override = 0,
 /* END : jooyeong.lee@lge.com 2012-02-27 */
 	/* LGE_CHANGE
 	* add the xo_thermal mitigation way
@@ -555,13 +542,31 @@ static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
 
 static struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
 	.battery_type                   = BATT_UNKNOWN,
-	.r_sense                        = 10,
+	.r_sense_uohm			= 10000,
 	.v_cutoff                       = 3400,
 	.max_voltage_uv                 = MAX_VOLTAGE_MV * 1000,
 	.rconn_mohm                     = 18,
 	.shutdown_soc_valid_limit       = 20,
 	.adjust_soc_low_threshold       = 25,
 	.chg_term_ua                    = CHG_TERM_MA * 1000,
+	.normal_voltage_calc_ms		= 20000,
+	.low_voltage_calc_ms		= 1000,
+	.alarm_low_mv			= 3400,
+	.alarm_high_mv			= 4000,
+	.high_ocv_correction_limit_uv	= 50,
+	.low_ocv_correction_limit_uv	= 100,
+	.hold_soc_est			= 3,
+	.enable_fcc_learning		= 1,
+	.min_fcc_learning_soc		= 20,
+	.min_fcc_ocv_pc			= 30,
+	.min_fcc_learning_samples	= 5,
+	
+	/* LGE_UPDATE_S [dongwon.choi] 2013-01-10 */
+#ifdef CONFIG_LGE_PM
+	.first_fixed_iavg_ma			= 500,
+	.shutdown_soc_threshold			= 15,
+#endif /* CONFIG_LGE_PM */
+	/* LGE_UPDATE_E */
 };
 
 /**
@@ -697,7 +702,7 @@ static struct pm8xxx_led_platform_data pm8xxx_leds_pdata = {
 };
 
 static struct pm8xxx_ccadc_platform_data pm8xxx_ccadc_pdata = {
-	.r_sense		= 10,
+	.r_sense_uohm		= 10000,
 	.calib_delay_ms		= 600000,
 };
 
@@ -811,10 +816,6 @@ void __init msm8960_init_pmic(void)
 				&msm8960_ssbi_pm8921_pdata;
 	pm8921_platform_data.num_regulators = msm_pm8921_regulator_pdata_len;
 
-	/* Simulator supports a QWERTY keypad */
-	if (machine_is_msm8960_sim())
-		pm8921_platform_data.keypad_pdata = &keypad_data_sim;
-
 	if (machine_is_msm8960_liquid()) {
 		pm8921_platform_data.keypad_pdata = &keypad_data_liquid;
 		pm8921_platform_data.leds_pdata = &pm8xxx_leds_pdata_liquid;
@@ -831,4 +832,10 @@ void __init msm8960_init_pmic(void)
 
 	if (machine_is_msm8960_fluid())
 		pm8921_bms_pdata.rconn_mohm = 20;
+
+#ifndef CONFIG_LGE_PM
+	if (!machine_is_msm8960_fluid() && !machine_is_msm8960_liquid()
+			&& !machine_is_msm8960_mtp())
+		pm8921_chg_pdata.battery_less_hardware = 1;
+#endif	
 }

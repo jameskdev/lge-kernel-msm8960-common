@@ -15,7 +15,7 @@
 #include <linux/ioport.h>
 #include <linux/platform_device.h>
 #include <linux/bootmem.h>
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #include <linux/gpio.h>
 #include <asm/mach-types.h>
 #include <mach/msm_bus_board.h>
@@ -36,8 +36,8 @@
 
 #include <mach/board_lge.h>
 
-#ifdef CONFIG_LGE_KCAL
-#ifdef CONFIG_LGE_QC_LCDC_LUT
+#ifdef CONFIG_LCD_KCAL
+#ifdef CONFIG_UPDATE_LCDC_LUT
 extern int set_qlut_kcal_values(int kcal_r, int kcal_g, int kcal_b);
 extern int refresh_qlut_display(void);
 #else
@@ -842,6 +842,9 @@ static struct notifier_block msm_fb_event_notifier = {
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = MDP_VSYNC_GPIO,
 	.mdp_max_clk = 200000000,
+	.mdp_max_bw = 2000000000,
+	.mdp_bw_ab_factor = 150,
+	.mdp_bw_ib_factor = 170,
 #ifdef CONFIG_MSM_BUS_SCALING
 	.mdp_bus_scale_table = &mdp_bus_scale_pdata,
 #endif
@@ -851,11 +854,9 @@ static struct msm_panel_common_pdata mdp_pdata = {
 #else
 	.mem_hid = MEMTYPE_EBI1,
 #endif
-#ifdef CONFIG_MACH_LGE
 	.cont_splash_enabled = 0x00,
-#else
-	.cont_splash_enabled = 0x01,
-#endif
+	.splash_screen_addr = 0x00,
+	.splash_screen_size = 0x00,
 	.mdp_iommu_split_domain = 0,
 };
 
@@ -868,6 +869,9 @@ void __init msm8960_mdp_writeback(struct memtype_reserve* reserve_table)
 		mdp_pdata.ov0_wb_size;
 	reserve_table[mdp_pdata.mem_hid].size +=
 		mdp_pdata.ov1_wb_size;
+
+	pr_info("mem_map: mdp reserved with size 0x%lx in pool\n",
+			mdp_pdata.ov0_wb_size + mdp_pdata.ov1_wb_size);
 #endif
 }
 
@@ -876,18 +880,18 @@ static char mipi_dsi_splash_is_enabled(void)
 	return mdp_pdata.cont_splash_enabled;
 }
 
-#if defined (CONFIG_BACKLIGHT_LM3530)
+#if defined (CONFIG_LGE_BACKLIGHT_LM3530)
 extern void lm3530_lcd_backlight_set_level(int level);
-#elif defined (CONFIG_BACKLIGHT_LM3533)
+#elif defined (CONFIG_LGE_BACKLIGHT_LM3533)
 extern void lm3533_lcd_backlight_set_level(int level);
 #endif
 
 #if defined(CONFIG_FB_MSM_MIPI_DSI_HITACHI)
 static int mipi_hitachi_backlight_level(int level, int max, int min)
 {
-#if defined (CONFIG_BACKLIGHT_LM3530)
+#if defined (CONFIG_LGE_BACKLIGHT_LM3530)
 	lm3530_lcd_backlight_set_level(level);
-#elif defined (CONFIG_BACKLIGHT_LM3533)
+#elif defined (CONFIG_LGE_BACKLIGHT_LM3533)
 	lm3533_lcd_backlight_set_level(level);
 #endif
 	return 0;
@@ -1169,9 +1173,9 @@ static struct msm_panel_common_pdata mipi_hitachi_pdata = {
 	.power_on_set_size = ARRAY_SIZE(hitachi_power_on_set),
 	.power_off_set_size = ARRAY_SIZE(hitachi_power_off_set),
 #endif
-#if defined (CONFIG_BACKLIGHT_LM3530)
+#if defined (CONFIG_LGE_BACKLIGHT_LM3530)
 	.max_backlight_level = 0x71,
-#elif defined (CONFIG_BACKLIGHT_LM3533)
+#elif defined (CONFIG_LGE_BACKLIGHT_LM3533)
 	.max_backlight_level = 0xFF,
 #endif
 };
@@ -1380,6 +1384,8 @@ static struct platform_device hdmi_msm_device = {
 	.resource = hdmi_msm_resources,
 	.dev.platform_data = &hdmi_msm_data,
 };
+//#else
+//static int hdmi_panel_power(int on) { return 0; }
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 
 #ifdef CONFIG_FB_MSM_WRITEBACK_MSM_PANEL
@@ -1395,6 +1401,7 @@ static struct platform_device wfd_device = {
 };
 #endif
 
+#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 #ifdef CONFIG_MSM_BUS_SCALING
 static struct msm_bus_vectors dtv_bus_init_vectors[] = {
 	{
@@ -1434,22 +1441,9 @@ static struct lcdc_platform_data dtv_pdata = {
 	.bus_scale_table = &dtv_bus_scale_pdata,
 	.lcdc_power_save = hdmi_panel_power,
 };
-
-static int hdmi_panel_power(int on)
-{
-	int rc;
-
-	pr_debug("%s: HDMI Core: %s\n", __func__, (on ? "ON" : "OFF"));
-	rc = hdmi_core_power(on, 1);
-	if (rc)
-		rc = hdmi_cec_power(on);
-
-	pr_debug("%s: HDMI Core: %s Success\n", __func__, (on ? "ON" : "OFF"));
-	return rc;
-}
 #endif
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
+
 static int hdmi_enable_5v(int on)
 {
 	/* TBD: PM8921 regulator instead of 8901 */
@@ -1644,7 +1638,22 @@ static int hdmi_cec_power(int on)
 error:
 	return rc;
 }
+
+
+static int hdmi_panel_power(int on)
+{
+	int rc;
+
+	pr_debug("%s: HDMI Core: %s\n", __func__, (on ? "ON" : "OFF"));
+	rc = hdmi_core_power(on, 1);
+	if (rc)
+		rc = hdmi_cec_power(on);
+
+	pr_debug("%s: HDMI Core: %s Success\n", __func__, (on ? "ON" : "OFF"));
+	return rc;
+}
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
+
 
 #ifdef CONFIG_LGE_HIDDEN_RESET
 static unsigned long hreset_fb_va = 0;
@@ -1678,6 +1687,15 @@ void lge_set_hreset_fb_va(unsigned long va)
 
 void __init msm8960_init_fb(void)
 {
+	uint32_t soc_platform_version = socinfo_get_version();
+
+
+	if (SOCINFO_VERSION_MAJOR(soc_platform_version) >= 3)
+		mdp_pdata.mdp_rev = MDP_REV_43;
+
+	if (cpu_is_msm8960ab())
+		mdp_pdata.mdp_rev = MDP_REV_44;
+
 	platform_device_register(&msm_fb_device);
 
 #ifdef CONFIG_FB_MSM_WRITEBACK_MSM_PANEL
@@ -1686,32 +1704,20 @@ void __init msm8960_init_fb(void)
 #endif
 
 #ifndef CONFIG_MACH_LGE
-	if (machine_is_msm8960_sim())
-		platform_device_register(&mipi_dsi_simulator_panel_device);
-
-	if (machine_is_msm8960_rumi3())
-		platform_device_register(&mipi_dsi_renesas_panel_device);
-
-	if (!machine_is_msm8960_sim() && !machine_is_msm8960_rumi3()) {
-		platform_device_register(&mipi_dsi_novatek_panel_device);
-		platform_device_register(&mipi_dsi_orise_panel_device);
+	platform_device_register(&mipi_dsi_novatek_panel_device);
+	platform_device_register(&mipi_dsi_orise_panel_device);
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-		platform_device_register(&hdmi_msm_device);
+	platform_device_register(&hdmi_msm_device);
 #endif
-	}
 
 	if (machine_is_msm8960_liquid())
 		platform_device_register(&mipi_dsi2lvds_bridge_device);
 	else
 		platform_device_register(&mipi_dsi_toshiba_panel_device);
-#endif /* CONFIG_MACH_LGE */
 
-	if (machine_is_msm8x60_rumi3()) {
-		msm_fb_register_device("mdp", NULL);
-		mipi_dsi_pdata.target_type = 1;
-	} else
-		msm_fb_register_device("mdp", &mdp_pdata);
+#endif
+	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("mipi_dsi", &mipi_dsi_pdata);
 #ifdef CONFIG_MSM_BUS_SCALING
 	msm_fb_register_device("dtv", &dtv_pdata);
@@ -1797,7 +1803,7 @@ void __init msm8960_set_display_params(char *prim_panel, char *ext_panel)
 
 #ifdef CONFIG_I2C
 
-#if defined (CONFIG_BACKLIGHT_LM3530)
+#if defined (CONFIG_LGE_BACKLIGHT_LM3530)
 #define LM3530_BACKLIGHT_ADDRESS 0x38
 
 struct backlight_platform_data {
@@ -1854,7 +1860,7 @@ static struct backlight_platform_data lm3530_data = {
 	.max_brightness = 0x7F,
 };
 
-#elif defined (CONFIG_BACKLIGHT_LM3533)
+#elif defined (CONFIG_LGE_BACKLIGHT_LM3533)
 #define LM3533_BACKLIGHT_ADDRESS 0x36
 
 struct backlight_platform_data {
@@ -1881,13 +1887,13 @@ static struct backlight_platform_data lm3533_data = {
 	.default_brightness = 0xA5,
 	.factory_brightness = 0x64,
 };
-#endif /* #if defined (CONFIG_BACKLIGHT_LM3530)*/
+#endif /* #if defined (CONFIG_LGE_BACKLIGHT_LM3530)*/
 static struct i2c_board_info msm_i2c_backlight_info[] = {
 	{
-#if defined (CONFIG_BACKLIGHT_LM3530)
+#if defined (CONFIG_LGE_BACKLIGHT_LM3530)
 		I2C_BOARD_INFO("lm3530", LM3530_BACKLIGHT_ADDRESS),
 		.platform_data = &lm3530_data,
-#elif defined (CONFIG_BACKLIGHT_LM3533)
+#elif defined (CONFIG_LGE_BACKLIGHT_LM3533)
 		I2C_BOARD_INFO("lm3533", LM3533_BACKLIGHT_ADDRESS),
 		.platform_data = &lm3533_data,
 #endif
@@ -1944,7 +1950,7 @@ static int __init panel_gpiomux_init(void)
 	return 0;
 }
 
-#ifdef CONFIG_LGE_KCAL
+#ifdef CONFIG_LCD_KCAL
 extern int set_kcal_values(int kcal_r, int kcal_g, int kcal_b);
 extern int refresh_kcal_display(void);
 extern int get_kcal_values(int *kcal_r, int *kcal_g, int *kcal_b);
@@ -1973,7 +1979,7 @@ static struct platform_device *d1l_panel_devices[] __initdata = {
 	&lcd_misc_device,
 #endif
 #endif
-#ifdef CONFIG_LGE_KCAL
+#ifdef CONFIG_LCD_KCAL
 	&kcal_platrom_device,
 #endif
 };

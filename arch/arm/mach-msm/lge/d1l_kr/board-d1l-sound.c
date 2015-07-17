@@ -11,7 +11,7 @@
 #include "../../../../sound/soc/codecs/wcd9310.h" // 2012-02-06, mint.choi@lge.com. for fsa8008 tabla_codec_micbias2_ctl API
 #endif
 
-#ifdef CONFIG_LGE_AUDIO_TPA2028D
+#ifdef CONFIG_SND_SOC_TPA2028D
 #include <sound/tpa2028d.h>
 
 /* Add the I2C driver for Audio Amp, ehgrace.kim@lge.cim, 06/13/2011 */
@@ -118,7 +118,7 @@ static struct fsa8008_platform_data lge_hs_pdata = {
 	.gpio_mic_en = GPIO_EAR_MIC_EN,
 	.gpio_jpole  = GPIO_EARPOL_DETECT,
 	.gpio_key    = GPIO_EAR_KEY_INT,
-	.latency_for_detection = 10, /* 75 -> 10, 2012.03.23 donggyun.kim - spec : 4.5 ms */
+	.latency_for_detection = 75, /* 75 -> 10, 2012.03.23 donggyun.kim - spec : 4.5 ms-> 2013.02.05,  75msec revert, mint.choi */
 	.set_headset_mic_bias = tabla_codec_micbias2_ctl, // 2012-02-06, mint.choi@lge.com. for fsa8008 tabla_codec_micbias2_ctl API
 };
 
@@ -144,7 +144,7 @@ static void __exit lge_hsd_fsa8008_exit(void)
 #endif
 void __init lge_add_sound_devices(void)
 {
-#ifdef CONFIG_LGE_AUDIO_TPA2028D
+#ifdef CONFIG_SND_SOC_TPA2028D
 	lge_add_i2c_audiosubsystem_devices();
 #endif
 
