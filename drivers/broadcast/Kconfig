@@ -13,7 +13,7 @@ menu "LGE Broadcast Device Support"
 
 config LGE_BROADCAST_TDMB
 	bool "LGE broadcast TDMB device Driver"
-	depends on( MACH_MSM8960_FX1SK || MACH_MSM8960_VU2)
+	depends on( MACH_MSM8960_FX1SK || MACH_MSM8960_VU2 || MACH_MSM8960_D1L_KR)
 	default y
 	help
 	  Select this if you want to use TDMB broadcast service
