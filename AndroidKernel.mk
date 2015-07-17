@@ -61,13 +61,40 @@ endef
 $(KERNEL_OUT):
 	mkdir -p $(KERNEL_OUT)
 
+# LGE_CHANGE_S
+# porting bootchart2 to android
+# byungchul.park@lge.com 20120620
+ifeq ($(INIT_BOOTCHART2),true)
+KERNEL_DEFCONFIG_PATH:=kernel/arch/arm/configs/$(KERNEL_DEFCONFIG)
+KERNEL_DEFCONFIG_BC2_PATH:=kernel/arch/arm/configs/bc2_$(KERNEL_DEFCONFIG)
+
+bootchart2defconfig:
+	cp -f $(KERNEL_DEFCONFIG_PATH) $(KERNEL_DEFCONFIG_BC2_PATH)
+	echo "CONFIG_TASKSTATS=y" >> $(KERNEL_DEFCONFIG_BC2_PATH)
+	echo "CONFIG_TASK_DELAY_ACCT=y" >> $(KERNEL_DEFCONFIG_BC2_PATH)
+	echo "CONFIG_TASK_XACCT=y" >> $(KERNEL_DEFCONFIG_BC2_PATH)
+	echo "CONFIG_TASK_IO_ACCOUNTING=y" >> $(KERNEL_DEFCONFIG_BC2_PATH)
+	echo "CONFIG_CONNECTOR=y" >> $(KERNEL_DEFCONFIG_BC2_PATH)
+	echo "CONFIG_PROC_EVENTS=y" >> $(KERNEL_DEFCONFIG_BC2_PATH)
+
+$(KERNEL_CONFIG): $(KERNEL_OUT) bootchart2defconfig
+	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- bc2_$(KERNEL_DEFCONFIG)
+else
+# LGE_CHANGE_E
+
 $(KERNEL_CONFIG): $(KERNEL_OUT)
-	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- $(KERNEL_DEFCONFIG)
+	+$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- $(KERNEL_DEFCONFIG)
+
+# LGE_CHANGE_S
+# porting bootchart2 to android
+# byungchul.park@lge.com 20120620
+endif
+# LGE_CHANGE_E
 
 $(KERNEL_OUT)/piggy : $(TARGET_PREBUILT_INT_KERNEL)
 	$(hide) gunzip -c $(KERNEL_OUT)/arch/arm/boot/compressed/piggy.gzip > $(KERNEL_OUT)/piggy
 
-$(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_INSTALL)
+$(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_INSTALL) build_exfat move_clean
 	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi-
 	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- modules
 	$(MAKE) -C kernel O=../$(KERNEL_OUT) INSTALL_MOD_PATH=../../$(KERNEL_MODULES_INSTALL) INSTALL_MOD_STRIP=1 ARCH=arm CROSS_COMPILE=arm-eabi- modules_install
@@ -75,8 +102,36 @@ $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_I
 	$(clean-module-folder)
 	$(append-dtb)
 
+build_kernel : $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_INSTALL)
+	+$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi-
+	+$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- modules
+	+$(MAKE) -C kernel O=../$(KERNEL_OUT) INSTALL_MOD_PATH=../../$(KERNEL_MODULES_INSTALL) ARCH=arm CROSS_COMPILE=arm-eabi- modules_install
+
+build_exfat : $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_INSTALL) build_kernel
+ifeq ($(PRODUCT_SUPPORT_EXFAT), y)
+	@cp -f $(ANDROID_BUILD_TOP)/kernel/tuxera_update.sh $(ANDROID_BUILD_TOP)
+	@sh tuxera_update.sh --source-dir $(ANDROID_BUILD_TOP)/kernel --output-dir $(ANDROID_BUILD_TOP)/$(KERNEL_OUT) -a --user lg-mobile --pass AumlTsj0ou
+	@tar -xzf tuxera-exfat-3012.9.14-msm8960.tgz
+	@mkdir -p $(TARGET_OUT_EXECUTABLES)
+	@cp $(ANDROID_BUILD_TOP)/tuxera-exfat-3012.9.14-msm8960/exfat/kernel-module/texfat.ko $(ANDROID_BUILD_TOP)/$(TARGET_OUT_EXECUTABLES)/../lib/modules/
+	@cp $(ANDROID_BUILD_TOP)/tuxera-exfat-3012.9.14-msm8960/exfat/tools/* $(TARGET_OUT_EXECUTABLES)
+	@rm -f kheaders.tar.bz2
+	@rm -f tuxera-exfat-3012.9.14-msm8960.tgz
+	@rm -rf tuxera-exfat-3012.9.14-msm8960.tgz
+	@rm -f tuxera_update.sh
+endif
+
+ifndef ECLOUD_BUILD_ID
+move_clean: $(KERNEL_OUT) $(KERNEL_CONFIG) $(KERNEL_HEADERS_INSTALL) build_kernel build_exfat
+	$(mv-modules)
+else # non-ECLUOD_BUILD_ID
+#pragma RUNLOCAL
+move_clean:
+	$(mv-modules)
+endif #ECLOUD_BUILD_ID
+
 $(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT) $(KERNEL_CONFIG)
-	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- headers_install
+	+$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- headers_install
 
 kerneltags: $(KERNEL_OUT) $(KERNEL_CONFIG)
 	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- tags

@@ -627,6 +627,15 @@ int msm_bus_scale_client_update_request(uint32_t cl, unsigned index)
 			req_bw = 0;
 		}
 
+		if (index == 0) {
+			/* This check protects the bus driver from clients
+			 * that can leave non-zero requests after
+			 * unregistering.
+			 * */
+			req_clk = 0;
+			req_bw = 0;
+		}
+
 		if (!pdata->active_only) {
 			ret = update_path(src, pnode, req_clk, req_bw,
 				curr_clk, curr_bw, 0, pdata->active_only);

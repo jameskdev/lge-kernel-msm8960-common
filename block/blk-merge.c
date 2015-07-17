@@ -46,6 +46,13 @@ static unsigned int __blk_recalc_rq_segments(struct request_queue *q,
 				    (bvprv->bv_page + 1) != bv->bv_page)
 					goto new_segment;
 
+#if defined(CONFIG_MACH_MSM8960_FX1SK)
+				// CR-fix : 392141(codeaurora:commit:6e25ce37a4f5750467f7c741b549687ebbc10667)
+				if ((bvprv->bv_page != bv->bv_page) &&
+				    (bvprv->bv_page + 1) != bv->bv_page)
+					goto new_segment;
+				// CR-fix : 392141(codeaurora:commit:6e25ce37a4f5750467f7c741b549687ebbc10667)
+#endif
 				seg_size += bv->bv_len;
 				bvprv = bv;
 				continue;
@@ -148,6 +155,13 @@ int blk_rq_map_sg(struct request_queue *q, struct request *rq,
 			    ((bvprv->bv_page + 1) != bvec->bv_page))
 				goto new_segment;
 
+#if defined(CONFIG_MACH_MSM8960_FX1SK)
+			// CR-fix : 392141(codeaurora:commit:6e25ce37a4f5750467f7c741b549687ebbc10667)
+			if ((bvprv->bv_page != bvec->bv_page) &&
+			    ((bvprv->bv_page + 1) != bvec->bv_page))
+				goto new_segment;
+			// CR-fix : 392141(codeaurora:commit:6e25ce37a4f5750467f7c741b549687ebbc10667)
+#endif
 			sg->length += nbytes;
 		} else {
 new_segment:

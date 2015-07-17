@@ -1189,7 +1189,11 @@ int mipi_dsi_cmds_tx(struct dsi_buf *tp, struct dsi_cmd_desc *cmds, int cnt)
 		mipi_dsi_cmd_dma_add(tp, cm);
 		mipi_dsi_cmd_dma_tx(tp);
 		if (cm->wait)
+#ifdef CONFIG_MACH_LGE
+                     mdelay(cm->wait);
+#else
 			msleep(cm->wait);
+#endif
 		cm++;
 	}
 

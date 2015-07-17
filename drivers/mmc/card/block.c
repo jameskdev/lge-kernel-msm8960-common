@@ -1189,6 +1189,7 @@ static int mmc_blk_err_check(struct mmc_card *card,
 
 				return MMC_BLK_CMD_ERR;
 			}
+
 			/*
 			 * Some cards mishandle the status bits,
 			 * so make sure to check both the busy

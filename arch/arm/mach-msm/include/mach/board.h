@@ -401,6 +401,29 @@ struct msm_panel_common_pdata {
 	u32 splash_screen_addr;
 	u32 splash_screen_size;
 	char mdp_iommu_split_domain;
+#ifdef CONFIG_LGE_LCD_TUNING
+	/* LGE_CHANGE
+	 * To get init code used for LCD driver
+	 * 2011-11-09, baryun.hwang@lge.com
+	 */
+	int (*read_regset)(unsigned long);
+	int (*write_regset)(unsigned long);
+	int (*read_porch)(unsigned long);
+	int (*write_porch)(unsigned long);
+#endif
+	void *power_on_set;
+	void *power_off_set;
+	ssize_t power_on_set_size;
+	ssize_t power_off_set_size;
+	
+#if defined(CONFIG_MACH_MSM8960_L1v)
+	void *power_off_set_ief;	
+	void *power_on_set_ief;
+	ssize_t power_off_set_ief_size;	
+	ssize_t power_on_set_ief_size;	
+#endif
+
+	int max_backlight_level;
 };
 
 
@@ -479,6 +502,7 @@ struct msm_fb_platform_data {
 	int (*allow_set_offset)(void);
 	char prim_panel_name[PANEL_NAME_MAX_LEN];
 	char ext_panel_name[PANEL_NAME_MAX_LEN];
+	u32 *porch;
 };
 
 struct msm_hdmi_platform_data {
@@ -593,7 +617,6 @@ void mpq8092_init_gpiomux(void);
 struct mmc_platform_data;
 int msm_add_sdcc(unsigned int controller,
 		struct mmc_platform_data *plat);
-int msm_add_uio(void);
 
 void msm_pm_register_irqs(void);
 struct msm_usb_host_platform_data;

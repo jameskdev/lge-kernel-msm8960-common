@@ -493,3 +493,4 @@ unsigned long get_ddr_size(void)
 
 	return ret;
 }
+

@@ -299,6 +299,12 @@ config LEDS_PM8XXX
 	  To compile this driver as a module, choose M here: the module will
 	  be called leds-pmic8xxx.
 
+config LEDS_PM8XXX_RGB
+	tristate "LED Support RGB LEDs"
+	depends on LEDS_PM8XXX
+	help
+	  This option enables support for RGB LEDs
+
 config LEDS_PCA9633
 	tristate "LED support for PCA9633 I2C chip"
 	depends on LEDS_CLASS

@@ -44,3 +44,15 @@ config MMC_PARANOID_SD_INIT
 	  about re-trying SD init requests. This can be a useful
 	  work-around for buggy controllers and hardware. Enable
 	  if you are experiencing issues with SD detection.
+
+# LGE_UPDATE_START
+# This is only for D1LV(VS930, Samsung Crappy-eMMC)
+# When we use ext4-mount-option-discard, Samsung eMMC is corrupted.
+# So, Samsung suggest that we use argument(0x00000003)
+# 2012-06-28, warkap.seo@lge.com
+config LGE_MMC_ERASE_TRIM_ARGU_03
+	bool "Enable trim-erase with argument 0x00000003"
+	help
+	  If you say Y here, trim-erase will be done with argument 0x00000003
+# LGE_UPDATE_END
+

@@ -723,6 +723,31 @@ static struct rpm_regulator_consumer_mapping
 	RPM_REG_MAP(S3,   0, 5, "krait3_dig",   "acpuclk-8064"),
 };
 
+#define RPM_REG_MAP(_id, _sleep_also, _voter, _supply, _dev_name) \
+	{ \
+		.vreg_id = RPM_VREG_ID_PM8921_##_id, \
+		.sleep_also = _sleep_also, \
+		.voter = _voter, \
+		.supply = _supply, \
+		.dev_name = _dev_name, \
+	}
+static struct rpm_regulator_consumer_mapping
+	      msm_rpm_regulator_consumer_mapping[] __devinitdata = {
+	RPM_REG_MAP(LVS7, 0, 1, "krait0_hfpll", "acpuclk-8064"),
+	RPM_REG_MAP(LVS7, 0, 2, "krait1_hfpll", "acpuclk-8064"),
+	RPM_REG_MAP(LVS7, 0, 4, "krait2_hfpll", "acpuclk-8064"),
+	RPM_REG_MAP(LVS7, 0, 5, "krait3_hfpll", "acpuclk-8064"),
+	RPM_REG_MAP(LVS7, 0, 6, "l2_hfpll",     "acpuclk-8064"),
+	RPM_REG_MAP(L24,  0, 1, "krait0_mem",   "acpuclk-8064"),
+	RPM_REG_MAP(L24,  0, 2, "krait1_mem",   "acpuclk-8064"),
+	RPM_REG_MAP(L24,  0, 4, "krait2_mem",   "acpuclk-8064"),
+	RPM_REG_MAP(L24,  0, 5, "krait3_mem",   "acpuclk-8064"),
+	RPM_REG_MAP(S3,   0, 1, "krait0_dig",   "acpuclk-8064"),
+	RPM_REG_MAP(S3,   0, 2, "krait1_dig",   "acpuclk-8064"),
+	RPM_REG_MAP(S3,   0, 4, "krait2_dig",   "acpuclk-8064"),
+	RPM_REG_MAP(S3,   0, 5, "krait3_dig",   "acpuclk-8064"),
+};
+
 struct rpm_regulator_platform_data apq8064_rpm_regulator_pdata __devinitdata = {
 	.init_data		  = apq8064_rpm_regulator_init_data,
 	.num_regulators		  = ARRAY_SIZE(apq8064_rpm_regulator_init_data),

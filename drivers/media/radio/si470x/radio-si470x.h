@@ -24,6 +24,7 @@
 /* driver definitions */
 #define DRIVER_NAME "radio-si470x"
 
+#include <linux/i2c.h>
 
 /* kernel includes */
 #include <linux/kernel.h>
@@ -32,12 +33,85 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/input.h>
+#include <linux/version.h>
 #include <linux/videodev2.h>
 #include <linux/mutex.h>
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
 #include <asm/unaligned.h>
+#include <linux/kfifo.h>        /* lock free circular buffer    */
+#include <linux/uaccess.h>      /* copy to/from user            */
+#include <linux/workqueue.h>
+#include <linux/interrupt.h>
 
+#define SI470X_ADDRESS (0x20>>1)
+#define GPIO_SI470X_RESET_PIN		97
+#define GPIO_SI470X_EN_PIN		52
+#define GPIO_SI470X_AUD_CODEC_LDO_EN 47 /* Audience VDD Codec */
+#define SEEKTH_VAL 0x08
+struct si470x_fmradio_platform_data {
+	int (*power)(int);
+};
+enum radio_state_t {
+	FM_OFF,
+	FM_RECV,
+};
+typedef enum {USA, EUROPE, JAPAN} country_enum; // Could be expanded
+#define STD_BUF_SIZE               (128)
+#define SRCH_DIR_UP                 (0)
+#define SRCH_DIR_DOWN               (1)
+enum v4l2_cid_private_si470x_t {
+	V4L2_CID_PRIVATE_TAVARUA_SRCHMODE = (V4L2_CID_PRIVATE_BASE + 1),
+	V4L2_CID_PRIVATE_TAVARUA_SCANDWELL,
+	V4L2_CID_PRIVATE_TAVARUA_SRCHON,
+	V4L2_CID_PRIVATE_TAVARUA_STATE,        // 4
+	V4L2_CID_PRIVATE_TAVARUA_TRANSMIT_MODE,
+	V4L2_CID_PRIVATE_TAVARUA_RDSGROUP_MASK,
+	V4L2_CID_PRIVATE_TAVARUA_REGION,
+	V4L2_CID_PRIVATE_TAVARUA_SIGNAL_TH,        //  8
+	V4L2_CID_PRIVATE_TAVARUA_SRCH_PTY,
+	V4L2_CID_PRIVATE_TAVARUA_SRCH_PI,
+	V4L2_CID_PRIVATE_TAVARUA_SRCH_CNT,
+	V4L2_CID_PRIVATE_TAVARUA_EMPHASIS,          // 12
+	V4L2_CID_PRIVATE_TAVARUA_RDS_STD,
+	V4L2_CID_PRIVATE_TAVARUA_SPACING,
+	V4L2_CID_PRIVATE_TAVARUA_RDSON,            // 15
+	V4L2_CID_PRIVATE_TAVARUA_RDSGROUP_PROC,   
+	V4L2_CID_PRIVATE_TAVARUA_LP_MODE,
+	V4L2_CID_PRIVATE_TAVARUA_ANTENNA,           // 18
+	V4L2_CID_PRIVATE_TAVARUA_RDSD_BUF,
+	V4L2_CID_PRIVATE_TAVARUA_PSALL,
+	V4L2_CID_PRIVATE_TAVARUA_TX_SETPSREPEATCOUNT,   // 21
+	V4L2_CID_PRIVATE_TAVARUA_STOP_RDS_TX_PS_NAME,
+	V4L2_CID_PRIVATE_TAVARUA_STOP_RDS_TX_RT,
+	V4L2_CID_PRIVATE_TAVARUA_IOVERC,               //  24
+	V4L2_CID_PRIVATE_TAVARUA_INTDET,
+	V4L2_CID_PRIVATE_TAVARUA_MPX_DCC,
+	V4L2_CID_PRIVATE_TAVARUA_AF_JUMP,              //  27
+	V4L2_CID_PRIVATE_TAVARUA_RSSI_DELTA,
+	V4L2_CID_PRIVATE_TAVARUA_HLSI,
+	V4L2_CID_PRIVATE_SOFT_MUTE,/* 0x800001E*/         //  30
+	V4L2_CID_PRIVATE_RIVA_ACCS_ADDR,
+	V4L2_CID_PRIVATE_RIVA_ACCS_LEN,                 //32
+	V4L2_CID_PRIVATE_RIVA_PEEK,
+	V4L2_CID_PRIVATE_RIVA_POKE,
+	V4L2_CID_PRIVATE_SSBI_ACCS_ADDR,         //  35
+	V4L2_CID_PRIVATE_SSBI_PEEK,
+	V4L2_CID_PRIVATE_SSBI_POKE,
+	V4L2_CID_PRIVATE_TX_TONE,               //  38
+	V4L2_CID_PRIVATE_RDS_GRP_COUNTERS,
+	V4L2_CID_PRIVATE_SET_NOTCH_FILTER,/* 0x8000028 */
+	V4L2_CID_PRIVATE_TAVARUA_SET_AUDIO_PATH,/* 0x8000029 */
+	V4L2_CID_PRIVATE_TAVARUA_DO_CALIBRATION,/* 0x800002A : IRIS */
+	V4L2_CID_PRIVATE_TAVARUA_SRCH_ALGORITHM,/* 0x800002B */
+	V4L2_CID_PRIVATE_IRIS_GET_SINR, /* 0x800002C : IRIS */
+	V4L2_CID_PRIVATE_INTF_LOW_THRESHOLD, /* 0x800002D */
+	V4L2_CID_PRIVATE_INTF_HIGH_THRESHOLD, /* 0x800002E */
+	V4L2_CID_PRIVATE_SINR_THRESHOLD,  /* 0x800002F : IRIS */
+	V4L2_CID_PRIVATE_SINR_SAMPLES,  /* 0x8000030 : IRIS */
+	V4L2_CID_SI470X_AUDIO_VOLUME = (V4L2_CID_PRIVATE_BASE + 96),/* 0x8000060 : SI4709 */
+	V4L2_CID_SI470X_AUDIO_MUTE = (V4L2_CID_PRIVATE_BASE + 97),/* 0x8000061 : SI4709 */	
+};
 
 
 /**************************************************************************
@@ -119,6 +193,48 @@
 #define READCHAN_BLERD		0x0c00	/* bits 11..10: RDS Block B Errors (Si4701 only) */
 #define READCHAN_READCHAN	0x03ff	/* bits 09..00: Read Channel */
 
+#define RDS_TYPE_0A     ( 0 * 2 + 0)
+#define RDS_TYPE_0B     ( 0 * 2 + 1)
+#define RDS_TYPE_1A     ( 1 * 2 + 0)
+#define RDS_TYPE_1B     ( 1 * 2 + 1)
+#define RDS_TYPE_2A     ( 2 * 2 + 0)
+#define RDS_TYPE_2B     ( 2 * 2 + 1)
+#define RDS_TYPE_3A     ( 3 * 2 + 0)
+#define RDS_TYPE_3B     ( 3 * 2 + 1)
+#define RDS_TYPE_4A     ( 4 * 2 + 0)
+#define RDS_TYPE_4B     ( 4 * 2 + 1)
+#define RDS_TYPE_5A     ( 5 * 2 + 0)
+#define RDS_TYPE_5B     ( 5 * 2 + 1)
+#define RDS_TYPE_6A     ( 6 * 2 + 0)
+#define RDS_TYPE_6B     ( 6 * 2 + 1)
+#define RDS_TYPE_7A     ( 7 * 2 + 0)
+#define RDS_TYPE_7B     ( 7 * 2 + 1)
+#define RDS_TYPE_8A     ( 8 * 2 + 0)
+#define RDS_TYPE_8B     ( 8 * 2 + 1)
+#define RDS_TYPE_9A     ( 9 * 2 + 0)
+#define RDS_TYPE_9B     ( 9 * 2 + 1)
+#define RDS_TYPE_10A    (10 * 2 + 0)
+#define RDS_TYPE_10B    (10 * 2 + 1)
+#define RDS_TYPE_11A    (11 * 2 + 0)
+#define RDS_TYPE_11B    (11 * 2 + 1)
+#define RDS_TYPE_12A    (12 * 2 + 0)
+#define RDS_TYPE_12B    (12 * 2 + 1)
+#define RDS_TYPE_13A    (13 * 2 + 0)
+#define RDS_TYPE_13B    (13 * 2 + 1)
+#define RDS_TYPE_14A    (14 * 2 + 0)
+#define RDS_TYPE_14B    (14 * 2 + 1)
+#define RDS_TYPE_15A    (15 * 2 + 0)
+#define RDS_TYPE_15B    (15 * 2 + 1)
+
+#define BLOCK_A 6
+#define BLOCK_B 4
+#define BLOCK_C 2
+#define BLOCK_D 0
+#define CORRECTED_NONE          0
+#define CORRECTED_ONE_TO_TWO    1
+#define CORRECTED_THREE_TO_FIVE 2
+#define UNCORRECTABLE           3
+#define ERRORS_CORRECTED(data,block) ((data>>block)&0x03)
 #define RDSA			12	/* RDSA */
 #define RDSA_RDSA		0xffff	/* bits 15..00: RDS Block A Data (Si4701 only) */
 
@@ -132,10 +248,46 @@
 #define RDSD_RDSD		0xffff	/* bits 15..00: RDS Block D Data (Si4701 only) */
 
 
+#define SI470X_DELAY 10
 
 /**************************************************************************
  * General Driver Definitions
  **************************************************************************/
+enum si470x_buf_t {
+	SI470X_BUF_SRCH_LIST,
+	SI470X_BUF_EVENTS,
+	SI470X_BUF_RT_RDS,
+	SI470X_BUF_PS_RDS,
+	SI470X_BUF_RAW_RDS,
+	SI470X_BUF_AF_LIST,
+	SI470X_BUF_PEEK,
+	SI470X_BUF_SSBI_PEEK,
+	SI470X_BUF_RDS_CNTRS,
+	SI470X_BUF_RD_DEFAULT,
+	SI470X_BUF_CAL_DATA,
+	SI470X_BUF_MAX
+};
+enum si470x_evt_t {
+	SI470X_EVT_RADIO_READY,
+	SI470X_EVT_TUNE_SUCC,
+	SI470X_EVT_SEEK_COMPLETE,
+	SI470X_EVT_SCAN_NEXT,
+	SI470X_EVT_NEW_RAW_RDS,
+	SI470X_EVT_NEW_RT_RDS,    // 5
+	SI470X_EVT_NEW_PS_RDS,
+	SI470X_EVT_ERROR,
+	SI470X_EVT_BELOW_TH,
+	SI470X_EVT_ABOVE_TH,     //  9
+	SI470X_EVT_STEREO,
+	SI470X_EVT_MONO,
+	SI470X_EVT_RDS_AVAIL,
+	SI470X_EVT_RDS_NOT_AVAIL,  // 13
+	SI470X_EVT_NEW_SRCH_LIST,
+	SI470X_EVT_NEW_AF_LIST,
+	SI470X_EVT_TXRDSDAT,
+	SI470X_EVT_TXRDSDONE,
+	SI470X_EVT_RADIO_DISABLED
+};
 
 /*
  * si470x_device - private data
@@ -157,8 +309,19 @@ struct si470x_device {
 	unsigned int rd_index;
 	unsigned int wr_index;
 
+	struct kfifo data_buf[SI470X_BUF_MAX];
+	spinlock_t buf_lock[SI470X_BUF_MAX];
+	unsigned char event_value[20];
+	unsigned char event_number;
+	unsigned char event_lock;
 	struct completion completion;
 	bool stci_enabled;		/* Seek/Tune Complete Interrupt */
+	wait_queue_head_t event_queue;
+	struct workqueue_struct *wqueue;
+	struct delayed_work work;
+	unsigned char seek_onoff;
+	unsigned char mute;	/*mute = 1, unmute = 0*/
+	unsigned int volume;	/*volume = 0...10 */
 
 #if defined(CONFIG_USB_SI470X) || defined(CONFIG_USB_SI470X_MODULE)
 	/* reference to USB and video device */
@@ -179,9 +342,9 @@ struct si470x_device {
 	unsigned char disconnected;
 #endif
 
-#if defined(CONFIG_I2C_SI470X) || defined(CONFIG_I2C_SI470X_MODULE)
+//#if defined(CONFIG_I2C_SI470X) || defined(CONFIG_I2C_SI470X_MODULE)
 	struct i2c_client *client;
-#endif
+//#endif
 };
 
 
@@ -217,9 +380,20 @@ int si470x_get_register(struct si470x_device *radio, int regnr);
 int si470x_set_register(struct si470x_device *radio, int regnr);
 int si470x_disconnect_check(struct si470x_device *radio);
 int si470x_set_freq(struct si470x_device *radio, unsigned int freq);
+int si470x_get_freq(struct si470x_device *radio, unsigned int *freq);
 int si470x_start(struct si470x_device *radio);
 int si470x_stop(struct si470x_device *radio);
+void si470x_test(struct si470x_device *radio);
+int si470x_set_seek(struct si470x_device *radio,	unsigned int wrap_around, unsigned int seek_upward);
+int si470x_mute(struct si470x_device *radio, u8 mute);
 int si470x_fops_open(struct file *file);
 int si470x_fops_release(struct file *file);
 int si470x_vidioc_querycap(struct file *file, void *priv,
 		struct v4l2_capability *capability);
+int fmradio_power(int on);
+void si470x_q_event(struct si470x_device *radio,enum si470x_evt_t event);
+irqreturn_t si470x_i2c_interrupt(int irq, void *dev_id);
+void updateRds(struct si470x_device *radio);
+void initRdsVars(void);
+void initRdsBuffers(void);
+int si470x_set_chan(struct si470x_device *radio, unsigned short chan);

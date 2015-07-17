@@ -61,6 +61,8 @@ static struct snd_pcm_hardware msm_afe_hardware = {
 static enum hrtimer_restart afe_hrtimer_callback(struct hrtimer *hrt);
 static enum hrtimer_restart afe_hrtimer_rec_callback(struct hrtimer *hrt);
 
+int appl_counter = 0;
+int hw_counter = 0;
 static void q6asm_event_handler(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv)
 {
@@ -227,7 +229,7 @@ static void pcm_afe_process_rx_pkt(uint32_t opcode,
 	case APR_BASIC_RSP_RESULT: {
 		switch (payload[0]) {
 		case AFE_SERVICE_CMD_RTPORT_RD:
-			pr_debug("Read done\n");
+			pr_debug("Read done-hw_counter: %d\n",hw_counter++);
 			prtd->pcm_irq_pos += snd_pcm_lib_period_bytes
 							(prtd->substream);
 			snd_pcm_period_elapsed(prtd->substream);
@@ -459,7 +461,9 @@ static int msm_afe_trigger(struct snd_pcm_substream *substream, int cmd)
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		pr_debug("%s: SNDRV_PCM_TRIGGER_START\n", __func__);
+		pr_info("%s: SNDRV_PCM_TRIGGER_START\n", __func__);
+		appl_counter = 0;
+		hw_counter = 0;
 		prtd->start = 1;
 		hrtimer_start(&prtd->hrt, ns_to_ktime(0),
 					HRTIMER_MODE_REL);
@@ -467,7 +471,7 @@ static int msm_afe_trigger(struct snd_pcm_substream *substream, int cmd)
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		pr_debug("%s: SNDRV_PCM_TRIGGER_STOP\n", __func__);
+		pr_info("%s: SNDRV_PCM_TRIGGER_STOP\n", __func__);
 		prtd->start = 0;
 		break;
 	default:
@@ -542,7 +546,7 @@ static snd_pcm_uframes_t msm_afe_pointer(struct snd_pcm_substream *substream)
 	if (prtd->pcm_irq_pos >= snd_pcm_lib_buffer_bytes(substream))
 		prtd->pcm_irq_pos = 0;
 
-	pr_debug("pcm_irq_pos = %d\n", prtd->pcm_irq_pos);
+	pr_debug("pcm_irq_pos = %d -appl_counter:%d\n", prtd->pcm_irq_pos,appl_counter++);
 	return bytes_to_frames(runtime, (prtd->pcm_irq_pos));
 }
 

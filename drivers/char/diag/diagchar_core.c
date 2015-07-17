@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,11 +43,16 @@
 #include "diag_masks.h"
 #include "diagfwd_bridge.h"
 
+//yckim.kim@lge.com 2012.04.18 : USB Access Lock add [START]
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+#include <linux/platform_device.h>
+#endif
+//yckim.kim@lge.com 2012.04.18 : USB Access Lock add [END]
+
 MODULE_DESCRIPTION("Diag Char Driver");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("1.0");
 
-#define MIN_SIZ_ALLOW 4
 #define INIT	1
 #define EXIT	-1
 struct diagchar_dev *driver;
@@ -977,8 +982,6 @@ long diagchar_ioctl(struct file *filp,
 		for (i = 0; i < MAX_DCI_CLIENTS; i++) {
 			if (driver->dci_client_tbl[i].client == NULL) {
 				driver->dci_client_tbl[i].client = current;
-				driver->dci_client_tbl[i].client_id =
-							driver->dci_client_id;
 				driver->dci_client_tbl[i].list =
 							 dci_params->list;
 				driver->dci_client_tbl[i].signal_type =
@@ -1059,7 +1062,7 @@ long diagchar_ioctl(struct file *filp,
 				 sizeof(struct diag_dci_health_stats)))
 			return -EFAULT;
 		mutex_lock(&dci_health_mutex);
-		i = diag_dci_find_client_index_health(stats.client_id);
+		i = diag_dci_find_client_index(current->tgid);
 		if (i != DCI_CLIENT_INDEX_INVALID) {
 			dci_params = &(driver->dci_client_tbl[i]);
 			stats.dropped_logs = dci_params->dropped_logs;
@@ -1382,6 +1385,14 @@ static int diagchar_write(struct file *file, const char __user *buf,
 {
 	int err, ret = 0, pkt_type, token_offset = 0;
 	int remote_proc = 0, index;
+	#ifdef CONFIG_LGE_DM_DEV
+	char *buf_dev;
+	#endif /*CONFIG_LGE_DM_DEV*/
+
+#ifdef CONFIG_LGE_DM_APP
+	char *buf_cmp;
+#endif
+
 #ifdef DIAG_DEBUG
 	int length = 0, i;
 #endif
@@ -1394,10 +1405,6 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	index = 0;
 	/* Get the packet type F3/log/event/Pkt response */
 	err = copy_from_user((&pkt_type), buf, 4);
-	if (err) {
-		pr_alert("diag: copy failed for pkt_type\n");
-		return -EAGAIN;
-	}
 	/* First 4 bytes indicate the type of payload - ignore these */
 	if (count < 4) {
 		pr_err("diag: Client sending short data\n");
@@ -1415,10 +1422,28 @@ static int diagchar_write(struct file *file, const char __user *buf,
 				&& (!driver->usb_connected)) ||
 				(driver->logging_mode == NO_LOGGING_MODE)) {
 		/*Drop the diag payload */
-		pr_debug("diag: Dropping packet, usb is not connected in usb mode and non-dci data type\n");
+		pr_err_ratelimited("diag: Dropping packet, usb is not connected in usb mode and non-dci data type\n");
 		return -EIO;
 	}
 #endif /* DIAG over USB */
+#ifdef CONFIG_LGE_DM_APP
+	if (driver->logging_mode == DM_APP_MODE) {
+		/* only diag cmd #250 for supporting testmode tool */
+		buf_cmp = (char *)buf + 4;
+		if (*(buf_cmp) != 0xFA)
+			return 0;
+	}
+#endif
+
+#ifdef CONFIG_LGE_DM_DEV
+	if (driver->logging_mode == DM_DEV_MODE) {
+		/* only diag cmd #250 for supporting testmode tool */
+		buf_dev = (char *)buf + 4;
+		if (*(buf_dev) != 0xFA)
+			return 0;
+	}
+#endif
+
 	if (pkt_type == DCI_DATA_TYPE) {
 		user_space_data = diagmem_alloc(driver, payload_size,
 								POOL_TYPE_USER);
@@ -1438,9 +1463,8 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		return err;
 	}
 	if (pkt_type == CALLBACK_DATA_TYPE) {
-		if (payload_size > itemsize ||
-				payload_size <= MIN_SIZ_ALLOW) {
-			pr_err("diag: Dropping packet, invalid packet size. Current payload size %d\n",
+		if (payload_size > itemsize) {
+			pr_err("diag: Dropping packet, packet payload size crosses 4KB limit. Current payload size %d\n",
 				payload_size);
 			driver->dropped_count++;
 			return -EBADMSG;
@@ -1585,11 +1609,6 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		remote_proc = diag_get_remote(*(int *)user_space_data);
 
 		if (remote_proc) {
-			if (payload_size <= MIN_SIZ_ALLOW) {
-				pr_err("diag: Integer underflow in %s, payload size: %d",
-							__func__, payload_size);
-				return -EBADMSG;
-			}
 			token_offset = 4;
 			payload_size -= 4;
 			buf += 4;
@@ -1997,6 +2016,194 @@ void diagfwd_bridge_fn(int type)
 inline void diagfwd_bridge_fn(int type) { }
 #endif
 
+//yckim.kim@lge.com 2012.04.18 : USB Access Lock add [START]
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+int user_diag_enable = 0;  //yckim.kim@lge.com 2012.05.23 :
+
+int emergency_diag_enable = 0;
+
+struct device *_diag_event;
+
+struct delayed_work diag_event_work;
+
+void android_diag_event_work(void) {
+        printk("@@@@@@@@@@@@ hyoill.leem %s\n",__func__);
+        schedule_delayed_work(&diag_event_work,msecs_to_jiffies(3000));
+}
+EXPORT_SYMBOL(android_diag_event_work);
+
+void write_diag_event_to_fw(struct work_struct *data)
+{
+        char *changed[2]   = { "DIAG_STATE=CHANGED", NULL };
+        char **uevent_envp = NULL;
+
+        uevent_envp = changed;
+
+        if (uevent_envp) {
+                         kobject_uevent_env(&_diag_event->kobj, KOBJ_CHANGE, uevent_envp);
+                         pr_info("%s: sent uevent %s\n", __func__, uevent_envp[0]);
+        } else {
+                         pr_info("%s: did not send uevent\n", __func__);
+
+        }
+}
+EXPORT_SYMBOL(write_diag_event_to_fw);
+
+static int lg_diag_event_probe(struct platform_device *pdev)
+{
+//      int ret;
+//      ret = lg_diag_event_create_file(pdev);
+        _diag_event = &pdev->dev;
+        return 0;
+//      return ret;
+}
+
+static int lg_diag_event_remove(struct platform_device *pdev)
+{
+//      lg_diag_event_remove_file(pdev);
+
+        return 0;
+}
+
+static struct platform_driver lg_diag_event_driver = {
+        .probe          = lg_diag_event_probe,
+        .remove         = lg_diag_event_remove,
+        .driver         = {
+                .name = "lg_diag_event",
+                .owner  = THIS_MODULE,
+        },
+};
+
+static int __init android_emergency_setup(char *reason)
+{
+	if (!strcmp(reason,"emergency"))
+	emergency_diag_enable = 1;
+	else
+	emergency_diag_enable = 0;
+
+	return 1;
+}
+__setup("androidboot.dload_mode=", android_emergency_setup);
+
+static ssize_t read_emergency_diag_enable(struct device *dev, struct device_attribute *attr,
+                                   char *buf)
+{
+        int ret;
+
+        ret = sprintf(buf, "%d", emergency_diag_enable);
+
+        return ret;
+}
+static ssize_t write_emergency_diag_enable(struct device *dev,
+                                    struct device_attribute *attr,
+                                    const char *buf, size_t size)
+{
+   unsigned char string[2];
+
+        sscanf(buf, "%s", string);
+
+        if(!strncmp(string, "0", 1))
+        {
+                emergency_diag_enable = 0;
+        }
+        else
+        {
+                emergency_diag_enable = 1;
+        }
+        return size;
+}
+
+extern void diag_disable(void);
+static ssize_t read_diag_enable(struct device *dev, struct device_attribute *attr,
+				   char *buf)
+{
+	int ret;
+
+	ret = sprintf(buf, "%d", user_diag_enable);
+
+	return ret;
+}
+static ssize_t write_diag_enable(struct device *dev,
+				    struct device_attribute *attr,
+				    const char *buf, size_t size)
+{
+	unsigned char string[2];
+
+	sscanf(buf, "%s", string);
+
+	if(!strncmp(string, "0", 1))
+	{
+		user_diag_enable = 0;
+	}
+	else
+	{
+		user_diag_enable = 1;
+	}
+
+	return size;
+}
+
+
+static DEVICE_ATTR(diag_enable, S_IRUGO | S_IWUSR, read_diag_enable, write_diag_enable);
+static DEVICE_ATTR(emergency_diag_enable, S_IRUGO | S_IWUSR, read_emergency_diag_enable, write_emergency_diag_enable);
+
+int lg_diag_create_file(struct platform_device *pdev)
+{
+	int ret;
+
+	ret = device_create_file(&pdev->dev, &dev_attr_diag_enable);
+	if (ret) {
+		printk( KERN_DEBUG "LG_FW : diag device diag_enable create fail\n");
+		device_remove_file(&pdev->dev, &dev_attr_diag_enable);
+		return ret;
+	}
+	return ret;
+}
+EXPORT_SYMBOL(lg_diag_create_file);
+
+int lg_diag_remove_file(struct platform_device *pdev)
+{
+	device_remove_file(&pdev->dev, &dev_attr_diag_enable);
+	return 0;
+}
+EXPORT_SYMBOL(lg_diag_remove_file);
+
+static int lg_diag_cmd_probe(struct platform_device *pdev)
+{
+	int ret;
+
+	ret = lg_diag_create_file(pdev);
+
+
+	ret = device_create_file(&pdev->dev, &dev_attr_emergency_diag_enable);
+        if (ret) {
+                printk( KERN_DEBUG "LG_FW : diag device diag_enable create fail\n");
+                device_remove_file(&pdev->dev, &dev_attr_emergency_diag_enable);
+                return ret;
+        }
+	return ret;
+}
+
+static int lg_diag_cmd_remove(struct platform_device *pdev)
+{
+	lg_diag_remove_file(pdev);
+
+	return 0;
+}
+
+static struct platform_driver lg_diag_cmd_driver = {
+	.probe		= lg_diag_cmd_probe,
+	.remove 	= lg_diag_cmd_remove,
+	.driver 	= {
+		.name = "lg_diag_cmd",
+		.owner	= THIS_MODULE,
+	},
+};
+
+#endif
+//yckim.kim@lge.com 2012.04.18 : USB Access Lock add [END]
+
+
 static int __init diagchar_init(void)
 {
 	dev_t dev;
@@ -2085,6 +2292,15 @@ static int __init diagchar_init(void)
 		printk(KERN_INFO "kzalloc failed\n");
 		goto fail;
 	}
+
+//yckim.kim@lge.com 2012.04.18 : USB Access Lock add [START]
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+	platform_driver_register(&lg_diag_cmd_driver);
+
+	platform_driver_register(&lg_diag_event_driver);
+	INIT_DELAYED_WORK(&diag_event_work, write_diag_event_to_fw);
+#endif
+//yckim.kim@lge.com 2012.04.18 : USB Access Lock add [END]
 
 	pr_info("diagchar initialized now");
 	return 0;

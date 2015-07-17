@@ -70,10 +70,34 @@ DEFINE_PER_CPU(atomic_t, msm_rtb_idx_cpu);
 static atomic_t msm_rtb_idx;
 #endif
 
+//temporaray for debugging
+#ifdef CONFIG_MACH_MSM8960_FX1SU
+struct msm_rtb_state msm_rtb = {
+	.filter = 0x76, // LOGK_LOGBUF,
+	.enabled = 1,
+};
+#elif defined(CONFIG_MACH_MSM8960_FX1SK)
+struct msm_rtb_state msm_rtb = {
+        .filter = 0x76, // LOGK_LOGBUF,
+        .enabled = 1,
+};
+#elif defined(CONFIG_MACH_MSM8960_L1v)
+struct msm_rtb_state msm_rtb = {
+        .filter = 0x76, // LOGK_LOGBUF,
+        .enabled = 1,
+};
+#elif defined(CONFIG_MACH_MSM8960_VU2)
+struct msm_rtb_state msm_rtb = {
+        .filter = 0x76, // LOGK_LOGBUF,
+        .enabled = 1,
+};
+#else
 struct msm_rtb_state msm_rtb = {
 	.filter = 1 << LOGK_READL | 1 << LOGK_WRITEL,
 	.enabled = 1,
 };
+#endif
+
 
 module_param_named(filter, msm_rtb.filter, uint, 0644);
 module_param_named(enable, msm_rtb.enabled, int, 0644);

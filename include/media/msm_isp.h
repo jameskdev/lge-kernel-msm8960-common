@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -241,7 +241,7 @@
 #define VFE_CMD_SET_STATS_VER                           164
 #define VFE_CMD_RGB_ALL_CFG                             165
 #define VFE_CMD_RGB_ALL_UPDATE                          166
-#define VFE_CMD_MAX                                     167
+#define VFE_CMD_STOP_RECORDING_DONE                     167 //QCT patch, Fix_IOMMU_and_VFE_bus_overflow, 2012-10-20, freeso.kim
 
 struct msm_isp_cmd {
 	int32_t  id;

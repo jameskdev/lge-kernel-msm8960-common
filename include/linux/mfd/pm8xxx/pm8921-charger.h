@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -56,8 +56,20 @@ enum pm8921_chg_led_src_config {
 	LED_SRC_BYPASS,
 };
 
+/* LGE_CHANGE
+ * add the xo_thermal mitigation way
+ * 2012-04-10, hiro.kwon@lge.com
+*/
+
+typedef enum{
+	IUSB_REDUCE_METHOD = 0,
+	IUSB_USE_FOR_ISYSTEM_METHOD,
+} xo_mitigation_way;
+/* 2012-04-10, hiro.kwon@lge.com */
+
 /**
  * struct pm8921_charger_platform_data -
+ * @safety_time:	max charging time in minutes incl. fast and trkl
  *			valid range 4 to 512 min. PON default 120 min
  * @ttrkl_time:		max trckl charging time in minutes
  *			valid range 1 to 64 mins. PON default 15 min
@@ -178,8 +190,27 @@ struct pm8921_charger_platform_data {
 	int				vin_min;
 	int				*thermal_mitigation;
 	int				thermal_levels;
+/* BEGIN : jooyeong.lee@lge.com 2012-02-27 Change the charger_temp_scenario */
+#ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
+	int				temp_level_1;
+	int				temp_level_2;
+	int				temp_level_3;
+	int				temp_level_4;
+	int				temp_level_5;
+	/* LGE_CHANGE
+ * add the xo_thermal mitigation way
+ * 2012-04-10, hiro.kwon@lge.com
+*/
+	xo_mitigation_way thermal_mitigation_method;
+/* 2012-04-10, hiro.kwon@lge.com */
+#endif
+/* END : jooyeong.lee@lge.com 2012-02-27 */
 	enum pm8921_chg_cold_thr	cold_thr;
 	enum pm8921_chg_hot_thr		hot_thr;
+#ifdef CONFIG_MACH_LGE
+	int batt_id_gpio;			/* No. of msm gpio for battery id */
+	int batt_id_pu_gpio;		/* No. of msm gpio for battery id pull up */
+#endif
 	int				rconn_mohm;
 	enum pm8921_chg_led_src_config	led_src_config;
 	int				battery_less_hardware;
@@ -203,6 +234,26 @@ enum pm8921_charger_source {
 void pm8921_charger_vbus_draw(unsigned int mA);
 int pm8921_charger_register_vbus_sn(void (*callback)(int));
 void pm8921_charger_unregister_vbus_sn(void (*callback)(int));
+/* 120521 mansu.lee@lge.com For touch ic when TA connected. */
+#ifdef CONFIG_LGE_PM
+extern int pm8921_charger_is_ta_connected(void);
+#endif
+/* 120521 mansu.lee@lge.com */
+#if defined (CONFIG_MACH_MSM8960_FX1)
+extern bool is_cable_conected (void);
+extern int is_battery_exist (void);
+#endif
+#ifdef CONFIG_LGE_PM
+/**
+ * pm8921_charger_enable -
+ *
+ * @enable: 1 means enable charging, 0 means disable
+ *
+ * Enable/Disable battery charging current, the device will still draw current
+ * from the charging source
+ */
+int pm8921_charger_enable(bool enable);
+#endif
 
 /**
  * pm8921_is_usb_chg_plugged_in - is usb plugged in
@@ -310,6 +361,10 @@ int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms);
  *
  */
 int pm8921_usb_ovp_disable(int disable);
+#ifdef CONFIG_LGE_PM
+void pm8921_charger_force_update_batt_psy(void);
+#endif
+
 /**
  * pm8921_is_batfet_closed - battery fet status
  *
@@ -373,6 +428,15 @@ static inline int pm8921_batt_temperature(void)
 {
 	return -ENXIO;
 }
+#ifdef CONFIG_LGE_PM
+static inline void pm8921_charger_force_update_batt_psy(void)
+{
+}
+static inline int pm8921_charger_enable(bool enable)
+{
+	return -ENXIO;
+}
+#endif
 static inline int pm8921_usb_ovp_set_threshold(enum pm8921_usb_ov_threshold ov)
 {
 	return -ENXIO;

@@ -423,6 +423,55 @@ config BATTERY_BCL
 	  thermal daemon enables BCL.
 	  It will notify thermal daemon if IBat crosses Imax threshold.
 
+config LGE_PM
+	tristate "PM8921 LGE Feature"
+	depends on MFD_PM8921_CORE
+	default n
+	help
+	  Say Y here to enable support for pm8921 chip lge feature
+
+config LGE_PM_435V_BATT
+	bool "LGE 4.35V Battery Feature"
+	help
+	  Say Y here to enable support for High Cell Voltage Battery.
+
+config BATTERY_MAX17043
+	tristate "Maxim MAX17043 Fuel Gauge"
+	depends on I2C && LGE_PM
+	default n
+	help
+	  MAX17043 is fuel-gauge systems for lithium-ion (Li+) batteries
+	  in handheld and portable equipment. The MAX17043 is configured
+	  to operate with a single lithium cell
+
+config LGE_PM_BATTERY_ID_CHECKER
+	depends on LGE_PM
+	default n
+	bool "LGE PM BATTERY ID CHECKER"
+	help
+	  LGE PM Battery Id Checker Configuration
+
+config LGE_CHARGER_TEMP_SCENARIO
+	depends on LGE_PM
+	default n
+	bool "LGE CHARGER TEMP SCENARIO Configuration"
+	help
+	  LGE CHARGER TEMP SCENARIO Configuration
+
+config LGE_WIRELESS_CHARGER
+	depends on LGE_PM
+	default n
+	bool "LGE WIRELESS CHARGER Configuration"
+	help
+	  LGE WIRELESS CHARGER Configuration
+
+config LGE_WIRELESS_CHARGER_BQ24160
+        depends on ARCH_MSM8960
+        default n
+        bool "LGE WIRELESS Charger BQ24160 Configuration"
+        help
+                LGE WIRELESS Charger BQ24160 Configuration
+
 config CHARGER_SMB347
 	tristate "Summit Microelectronics SMB347 Battery Charger"
 	depends on I2C

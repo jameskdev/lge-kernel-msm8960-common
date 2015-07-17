@@ -23,7 +23,11 @@
 #include <linux/time.h>
 
 static struct timespec suspend_time_before;
+#if defined (CONFIG_MACH_LGE)
+static unsigned int time_in_suspend_bins[33];
+#else
 static unsigned int time_in_suspend_bins[32];
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 static int suspend_time_debug_show(struct seq_file *s, void *data)

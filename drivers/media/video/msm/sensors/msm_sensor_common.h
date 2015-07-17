@@ -163,6 +163,21 @@ struct msm_sensor_fn_t {
 	int32_t (*sensor_read_eeprom)(struct msm_sensor_ctrl_t *);
 	int32_t (*sensor_hdr_update)(struct msm_sensor_ctrl_t *,
 		 struct sensor_hdr_update_parm_t *);
+
+//Start :randy@qualcomm.com for calibration 2012.03.25
+	int (*sensor_get_eeprom_data) (struct msm_sensor_ctrl_t *,
+		struct sensor_cfg_data *);
+//End :randy@qualcomm.com for calibration 2012.03.25
+// LGE_CHNAGE_S sungsik.kim 2012/11/07 {
+// for YUV sensor[JB]
+#ifdef CONFIG_MACH_LGE
+	int32_t (*sensor_set_wb) (struct msm_sensor_ctrl_t *, uint8_t);
+	int32_t (*sensor_set_effect) (struct msm_sensor_ctrl_t *, uint8_t);
+	int32_t (*sensor_set_brightness) (struct msm_sensor_ctrl_t *, uint8_t);
+	int32_t (*sensor_set_soc_minmax_fps) (struct msm_sensor_ctrl_t *, uint8_t, uint8_t);
+#endif
+// LGE_CHNAGE_E sungsik.kim 2012/11/07 }
+
 };
 
 struct msm_sensor_csi_info {

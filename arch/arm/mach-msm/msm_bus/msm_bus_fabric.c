@@ -49,6 +49,97 @@ struct msm_bus_fabric {
 #define to_msm_bus_fabric(d) container_of(d, \
 	struct msm_bus_fabric, d)
 
+#ifdef CONFIG_LGE_LCD_UNDERRUN
+#define NUM_TIERS 2
+#define MAX_NUMBER 5
+#define DIFF_TIME (600*HZ)
+
+struct commit_data {
+	uint16_t *bwsum;
+	uint8_t *arb[NUM_TIERS];
+	unsigned long *actarb[NUM_TIERS];
+};
+
+void get_msm_bus_clk(struct msm_bus_inode_info *info)
+{
+	long node_rate;
+	long mem_rate;
+	int i;
+	for (i = 0; i < NUM_CTX; i ++){
+			node_rate = clk_get_rate(info->nodeclk[i].clk);
+			mem_rate = clk_get_rate(info->memclk[i].clk);
+			printk("%d : node_clk_rate = %ld, mem_clk_rate = %ld\n",
+					i, node_rate, mem_rate);
+	}
+}
+
+void get_msm_bus_bw(struct commit_data *cdata, int n)
+{
+	int i;
+	for (i = 0; i < n; i++)
+		printk("0x%x ",cdata->bwsum[i]);
+	printk("\n");
+
+}
+
+
+
+void get_msm_bus_info(struct work_struct *work)
+{
+
+	struct msm_bus_fabric_device *fabdev;
+	struct msm_bus_fabric *fabric;
+	static u64 aftertime = 0;
+	static int count = 0;
+	u64 now = 0;
+
+	if(count >= 5){
+		now = get_jiffies_64();
+		if( now > aftertime){
+			printk("count set to 0");
+			count = 0;
+		}else
+			return;
+	}
+
+	fabdev = msm_bus_get_fabric_device(MSM_BUS_FAB_MMSS);
+	if (!fabdev) {
+		printk("MMSS Fabric Not yet registered. Try again\n");
+		return;
+	}
+
+	fabric	= to_msm_bus_fabric(fabdev);
+	printk("%s: UNDERRUN -- primary count = %d\n", __func__, count);
+	printk("%s bus info: \n", fabdev->name);
+	get_msm_bus_clk(&fabric->info);
+	printk("dual bwsum: ");
+	get_msm_bus_bw((struct commit_data *)fabric->cdata[DUAL_CTX], fabric->pdata->nslaves);
+	printk("active bwsum: ");
+	get_msm_bus_bw((struct commit_data *)fabric->cdata[ACTIVE_CTX], fabric->pdata->nslaves);
+
+	fabdev = msm_bus_get_fabric_device(MSM_BUS_FAB_APPSS);
+	if (!fabdev) {
+		printk("APPSS Fabric Not yet registered. Try again\n");
+		return;
+	}
+	fabric	= to_msm_bus_fabric(fabdev);
+
+	printk("%s bus info: \n", fabdev->name);
+	get_msm_bus_clk(&fabric->info);
+	printk("dual bwsum: ");
+	get_msm_bus_bw((struct commit_data *)fabric->cdata[DUAL_CTX], fabric->pdata->nslaves);
+	printk("active bwsum: ");
+	get_msm_bus_bw((struct commit_data *)fabric->cdata[ACTIVE_CTX], fabric->pdata->nslaves);
+	count ++;
+
+	if(count >= 5){
+		now = get_jiffies_64();
+		aftertime = now + DIFF_TIME;
+	}
+}
+
+#endif
+
 /**
  * msm_bus_fabric_add_node() - Add a node to the fabric structure
  * @fabric: Fabric device to which the node should be added

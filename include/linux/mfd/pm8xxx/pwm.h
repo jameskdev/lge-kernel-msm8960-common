@@ -86,12 +86,24 @@ struct pm8xxx_pwm_period {
  * duty_ms - duty cycle time in ms
  * start_idx - index in the LUT
  */
+
+#ifdef CONFIG_MACH_MSM8960_VU2
+struct pm8xxx_pwm_duty_cycles {
+	int *duty_pcts0;
+	int *duty_pcts1;
+	int num_duty_pcts0;
+	int num_duty_pcts1;
+	int duty_ms;
+	int start_idx;
+};
+#else
 struct pm8xxx_pwm_duty_cycles {
 	int *duty_pcts;
 	int num_duty_pcts;
 	int duty_ms;
 	int start_idx;
 };
+#endif
 
 /**
  * struct pm8xxx_pwm_platform_data - PWM platform data

@@ -59,7 +59,7 @@ typedef __u32 magic_t;
 extern unsigned int irda_debug;
 
 /* use 0 for production, 1 for verification, >2 for debug */
-#define IRDA_DEBUG_LEVEL 0
+#define IRDA_DEBUG_LEVEL 7
 
 #define IRDA_DEBUG(n, args...) \
 do {	if (irda_debug >= (n)) \

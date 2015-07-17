@@ -175,7 +175,21 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	clk_rate = mfd->fbi->var.pixclock;
 	clk_rate = min(clk_rate, mfd->panel_info.clk_max);
 
+#if defined(CONFIG_MACH_MSM8960_L1v)
+		/*
+	 * Fix kernel boot logo is not displayed.
+	 * 2012-01-04, kyunghoo.ryu@lge.com
+	 */
+	 if(system_state == SYSTEM_BOOTING) {
+		mipi_dsi_phy_ctrl(0);
+		mdelay(1);
+		mipi_dsi_phy_ctrl(1);
+	 } else {
 	mipi_dsi_phy_ctrl(1);
+	 }
+#else
+		mipi_dsi_phy_ctrl(1);
+#endif
 
 	if (mdp_rev == MDP_REV_42 && mipi_dsi_pdata)
 		target_type = mipi_dsi_pdata->target_type;
@@ -258,6 +272,15 @@ static int mipi_dsi_on(struct platform_device *pdev)
 		u32 tmp;
 
 		tmp = MIPI_INP(MIPI_DSI_BASE + 0xA8);
+#ifdef CONFIG_FB_MSM_MIPI_LGIT_VIDEO_HD_PT
+
+		/* LGE_CHANGE_S jaehyun.lee  for LCD power sequence*/
+		tmp |= (1<<20); 
+		MIPI_OUTP(MIPI_DSI_BASE + 0xA8, tmp);
+		mdelay(1);
+		tmp &= ~(1<<20);
+		/* LGE_CHANGE_E*/
+#endif 
 		tmp |= (1<<28);
 		MIPI_OUTP(MIPI_DSI_BASE + 0xA8, tmp);
 		wmb();
@@ -268,9 +291,29 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	else
 		down(&mfd->dma->mutex);
 
+#if defined(CONFIG_MACH_LGE)
 	ret = panel_next_on(pdev);
+	if (ret < 0)
+	{
+		if (mdp_rev >= MDP_REV_41)
+			mutex_unlock(&mfd->dma->ov_mutex);
+		else
+			up(&mfd->dma->mutex);
 
+		return ret;
+	} else {
+		ret = 0;
+	}
+
+/* FX1 does not set to video mode prior to power_on_cmd_seq. */
+#if !defined(CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT)
 	mipi_dsi_op_mode_config(mipi->mode);
+#endif
+
+#else
+	ret = panel_next_on(pdev);
+	mipi_dsi_op_mode_config(mipi->mode);
+#endif
 
 	if (mfd->panel_info.type == MIPI_CMD_PANEL) {
 		if (pinfo->lcd.vsync_enable) {

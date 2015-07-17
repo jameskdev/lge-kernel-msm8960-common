@@ -151,6 +151,11 @@ enum msm_spi_state {
 #define SPI_QUP_VERSION_NONE      0x0
 #define SPI_QUP_VERSION_BFAM      0x2
 
+#if defined(CONFIG_LGE_BROADCAST_TDMB)
+/* Improvement SPI latency */
+#define SPI_LGE_THREAD_FEATURE
+#endif /* CONFIG_LGE_BROADCAST */
+
 static char const * const spi_rsrcs[] = {
 	"spi_clk",
 	"spi_miso",
@@ -241,11 +246,22 @@ struct msm_spi {
 	struct list_head         queue;
 	struct workqueue_struct *workqueue;
 	struct work_struct       work_data;
+
+#ifdef SPI_LGE_THREAD_FEATURE
+	struct task_struct       *thread;
+#endif /* SPI_LGE_THREAD_FEATURE */
+
 	struct spi_message      *cur_msg;
 	struct spi_transfer     *cur_transfer;
 	struct completion        transfer_complete;
 	struct clk              *clk;
 	struct clk              *pclk;
+
+#ifdef SPI_LGE_THREAD_FEATURE
+	wait_queue_head_t        spi_isr_wait;
+	u32                      spi_isr_sig;
+#endif /* SPI_LGE_THREAD_FEATURE */
+
 	unsigned long            mem_phys_addr;
 	size_t                   mem_size;
 	int                      input_fifo_size;

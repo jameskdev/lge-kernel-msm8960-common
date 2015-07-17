@@ -10,11 +10,11 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/pm_qos.h>
-#include <linux/module.h>
 #include <mach/board.h>
 #include <mach/camera.h>
 #include <mach/camera.h>
@@ -139,9 +139,11 @@ void msm_camio_set_perf_lvl(enum msm_bus_perf_setting perf_setting)
 	switch (perf_setting) {
 	case S_INIT:
 		add_axi_qos();
+		update_axi_qos(MSM_AXI_QOS_PREVIEW);
+		axi_allocate(AXI_FLOW_VIEWFINDER_HI);
 		break;
 	case S_PREVIEW:
-		update_axi_qos(MSM_AXI_QOS_PREVIEW);
+		// do nothing as axi clock/bandwidth is already set while INIT
 		axi_allocate(AXI_FLOW_VIEWFINDER_HI);
 		break;
 	case S_VIDEO:

@@ -61,6 +61,18 @@
 #include "msm_sdcc.h"
 #include "msm_sdcc_dml.h"
 
+#ifdef CONFIG_MACH_LGE
+/* LGE_CHANGE
+* Exception handling : for DCM Board(for crappy Hynix eMMC).
+* Do not refer below code.
+* 2012-04-10, G1-FS@lge.com
+*/
+#if defined(CONFIG_MACH_MSM8960_L_DCM)
+#include <mach/board_lge.h>
+#endif
+#endif
+
+
 #define DRIVER_NAME "msm-sdcc"
 
 #define DBG(host, fmt, args...)	\
@@ -1657,6 +1669,20 @@ msmsdcc_pio_irq(int irq, void *dev_id)
 
 		if (!msmsdcc_sg_next(host, &buffer, &remain))
 			break;
+
+#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE
+		* Exception handling : Kernel Panic issue by Null Pointer
+		* 2011-11-10, warkap.seo@lge.com
+		*/
+		if(!host->curr.data)
+		{
+			writel(0, base + MMCIMASK1);
+			spin_unlock(&host->lock);
+			return IRQ_HANDLED;
+		}
+#endif
+
 
 		len = 0;
 		if (status & MCI_RXACTIVE)
@@ -5552,7 +5578,6 @@ static struct mmc_platform_data *msmsdcc_populate_pdata(struct device *dev)
 		dev_err(dev, "could not allocate memory for platform data\n");
 		goto err;
 	}
-
 	of_property_read_u32(np, "qcom,sdcc-bus-width", &bus_width);
 	if (bus_width == 8) {
 		pdata->mmc_bus_width = MMC_CAP_8_BIT_DATA;
@@ -5907,7 +5932,22 @@ msmsdcc_probe(struct platform_device *pdev)
 	mmc->pm_caps |= MMC_PM_KEEP_POWER | MMC_PM_WAKE_SDIO_IRQ;
 	mmc->caps |= plat->mmc_bus_width;
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED;
+
+#if defined(CONFIG_MACH_MSM8960_L_DCM)
+/* LGE_CHANGE
+* Exception handling : for DCM Board(for crappy Hynix eMMC).
+* Do not refer below code.
+* 2012-04-10, G1-FS@lge.com
+*/
+	if (lge_get_board_revno() >= HW_REV_D) {
+		mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE;
+	} else {
+		mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY;
+	}
+#else
 	mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE;
+#endif
+
 	mmc->caps |= MMC_CAP_HW_RESET;
 	/*
 	 * If we send the CMD23 before multi block write/read command
@@ -6661,6 +6701,61 @@ static int msmsdcc_runtime_resume(struct device *dev)
 	return 0;
 }
 #endif
+
+#ifdef CONFIG_MMC_MSM_SDC4_SUPPORT     // by lge
+static int sdc_clock_enable(struct mmc_host *mmc)
+{
+	struct msmsdcc_host *host = mmc_priv(mmc);
+	
+	int rc = 0;
+	
+	mutex_lock(&host->clk_mutex);
+
+	rc = msmsdcc_setup_clocks(host, true);
+	mutex_unlock(&host->clk_mutex);
+	return rc;
+}
+static int sdc_clock_disable(struct mmc_host *mmc)
+{
+	struct msmsdcc_host *host = mmc_priv(mmc);
+	
+	int rc = 0;
+	mutex_lock(&host->clk_mutex);
+	rc = msmsdcc_setup_clocks(host, false);
+
+	mutex_unlock(&host->clk_mutex);
+	return rc;
+}
+
+void
+msmsdcc_set_mmc_enable(int card_present, void *dev_id)
+{
+	struct msmsdcc_host *host = dev_id;
+//	struct device *dev = host->mmc->parent;
+	//wifi_enable=1;
+
+	if(card_present)
+	{
+//		msmsdcc_runtime_resume(dev);
+//		if (msmsdcc_enable(host->mmc))
+//			printk("[BIGLAKE] msmsdcc_enable fail!!!\n");;
+		if(sdc_clock_enable(host->mmc))
+			printk("[BIGLAKE] clk enable fail!!!\n");
+		
+	}
+	else
+	{
+//		msmsdcc_runtime_suspend(dev);
+//		if (msmsdcc_disable(host->mmc))
+//			printk("[BIGLAKE] msmsdcc_disable fail!!!\n");;
+		if(sdc_clock_disable(host->mmc))
+			printk("[BIGLAKE] clk disable fail!!!\n");
+
+		
+	}	
+	//wifi_enable=0;
+}
+#endif 
 
 static const struct dev_pm_ops msmsdcc_dev_pm_ops = {
 	.runtime_suspend = msmsdcc_runtime_suspend,

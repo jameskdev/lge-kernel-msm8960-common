@@ -1430,6 +1430,7 @@ probe_fail:
 	return NULL;
 }
 
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)
 static struct v4l2_subdev *msm_eeprom_probe(
 	struct msm_eeprom_info *eeprom_info)
 {
@@ -1466,6 +1467,7 @@ probe_fail:
 	pr_err("%s probe_fail\n", __func__);
 	return NULL;
 }
+#endif
 
 /* register a msm sensor into the msm device, which will probe the
  * sensor HW. if the HW exist then create a video device (/dev/videoX/)
@@ -1493,8 +1495,9 @@ int msm_sensor_register(struct v4l2_subdev *sensor_sd)
 	sdata = (struct msm_camera_sensor_info *) s_ctrl->sensordata;
 
 	pcam->act_sdev = msm_actuator_probe(sdata->actuator_info);
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)
 	pcam->eeprom_sdev = msm_eeprom_probe(sdata->eeprom_info);
-
+#endif
 	D("%s: pcam =0x%p\n", __func__, pcam);
 
 	pcam->sdata = sdata;
@@ -1542,6 +1545,7 @@ int msm_sensor_register(struct v4l2_subdev *sensor_sd)
 		}
 	}
 
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)
 	if (pcam->eeprom_sdev) {
 		rc = v4l2_device_register_subdev(&pcam->v4l2_dev,
 			pcam->eeprom_sdev);
@@ -1550,6 +1554,7 @@ int msm_sensor_register(struct v4l2_subdev *sensor_sd)
 			goto failure;
 		}
 	}
+#endif
 
 	pcam->vnode_id = vnode_count++;
 	return rc;

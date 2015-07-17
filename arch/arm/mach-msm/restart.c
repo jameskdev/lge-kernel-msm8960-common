@@ -35,6 +35,10 @@
 #include "msm_watchdog.h"
 #include "timer.h"
 
+#ifdef CONFIG_LGE_HIDDEN_RESET
+#include <mach/board_lge.h>
+#endif
+
 #define WDT0_RST	0x38
 #define WDT0_EN		0x40
 #define WDT0_BARK_TIME	0x4C
@@ -49,7 +53,8 @@
 
 #ifdef CONFIG_LGE_CRASH_HANDLER
 #define LGE_ERROR_HANDLER_MAGIC_NUM	0xA97F2C46
-#define LGE_ERROR_HANDLER_MAGIC_ADDR	0x18
+//#define LGE_ERROR_HANDLER_MAGIC_ADDR	0x18
+#define LGE_ERROR_HANDLER_MAGIC_ADDR     0x14  /*F7 JB value*/
 void *lge_error_handler_cookie_addr;
 static int ssr_magic_number = 0;
 #endif
@@ -84,12 +89,21 @@ static struct notifier_block panic_blk = {
 static void set_dload_mode(int on)
 {
 	if (dload_mode_addr) {
+#ifdef CONFIG_LGE_HIDDEN_RESET
+		/* If dload magic is set, rpm booting is skipped by bootloader
+		 * Thus, skip dload magic during hreset_enable
+		 */
+		if (on && hreset_enable && restart_mode != RESTART_DLOAD)
+			goto skip_dload_magic;
+#endif
 		__raw_writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		__raw_writel(on ? 0xCE14091A : 0,
 		       dload_mode_addr + sizeof(unsigned int));
+#ifdef CONFIG_LGE_HIDDEN_RESET
+skip_dload_magic:
+#endif
 #ifdef CONFIG_LGE_CRASH_HANDLER
-		__raw_writel(on ? LGE_ERROR_HANDLER_MAGIC_NUM : 0,
-				lge_error_handler_cookie_addr);
+		__raw_writel(on ? LGE_ERROR_HANDLER_MAGIC_NUM : 0,  lge_error_handler_cookie_addr);
 #endif
 		mb();
 	}
@@ -232,6 +246,10 @@ void set_kernel_crash_magic_number(void)
 }
 #endif /* CONFIG_LGE_CRASH_HANDLER */
 
+#ifdef CONFIG_MACH_LGE
+extern uint32_t *lge_add_info;
+#endif
+
 void msm_restart(char mode, const char *cmd)
 {
 
@@ -266,11 +284,22 @@ void msm_restart(char mode, const char *cmd)
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			__raw_writel(0x77665502, restart_reason);
+#ifdef CONFIG_LGE_BNR_RECOVERY_REBOOT
+			/* PC Sync B&R : Add restart reason */
+		} else if (!strncmp(cmd, "--bnr_recovery", 14)) {
+			__raw_writel(0x77665555, restart_reason);
+#endif
 		} else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned long code;
 			code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
 			__raw_writel(0x6f656d00 | code, restart_reason);
-		} else {
+		}
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+		else if (!strncmp(cmd, "charge_reset", 12)) {
+			__raw_writel(0x77665599, restart_reason);
+		}
+#endif
+		else {
 			__raw_writel(0x77665501, restart_reason);
 		}
 	} else {
@@ -301,23 +330,23 @@ reset:
 
 static int __init msm_pmic_restart_init(void)
 {
-	int rc;
+    int rc;
 
-	if (pmic_reset_irq != 0) {
-		rc = request_any_context_irq(pmic_reset_irq,
-					resout_irq_handler, IRQF_TRIGGER_HIGH,
-					"restart_from_pmic", NULL);
-		if (rc < 0)
-			pr_err("pmic restart irq fail rc = %d\n", rc);
-	} else {
-		pr_warn("no pmic restart interrupt specified\n");
-	}
+    if (pmic_reset_irq != 0) {
+        rc = request_any_context_irq(pmic_reset_irq,
+                    resout_irq_handler, IRQF_TRIGGER_HIGH,
+                    "restart_from_pmic", NULL);
+        if (rc < 0)
+            pr_err("pmic restart irq fail rc = %d\n", rc);
+    } else {
+        pr_warn("no pmic restart interrupt specified\n");
+    }
 
 #ifdef CONFIG_LGE_CRASH_HANDLER
 	__raw_writel(0x6d63ad00, restart_reason);
 #endif
 
-	return 0;
+    return 0;
 }
 
 late_initcall(msm_pmic_restart_init);
@@ -325,18 +354,19 @@ late_initcall(msm_pmic_restart_init);
 static int __init msm_restart_init(void)
 {
 #ifdef CONFIG_MSM_DLOAD_MODE
-	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
-	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
+    atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+    dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
 #ifdef CONFIG_LGE_CRASH_HANDLER
 	lge_error_handler_cookie_addr = MSM_IMEM_BASE +
 		LGE_ERROR_HANDLER_MAGIC_ADDR;
 #endif
-	set_dload_mode(download_mode);
+    set_dload_mode(download_mode);
 #endif
-	msm_tmr0_base = msm_timer_get_timer0_base();
-	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;
-	pm_power_off = msm_power_off;
+    msm_tmr0_base = msm_timer_get_timer0_base();
+    restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;
+    pm_power_off = msm_power_off;
 
 	return 0;
 }
+
 early_initcall(msm_restart_init);

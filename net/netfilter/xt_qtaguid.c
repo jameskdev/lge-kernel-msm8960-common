@@ -55,7 +55,11 @@ module_param_named(stats_perms, proc_stats_perms, uint, S_IRUGO | S_IWUSR);
 
 static struct proc_dir_entry *xt_qtaguid_ctrl_file;
 #ifdef CONFIG_ANDROID_PARANOID_NETWORK
+/*2012-09-25 Sir.Wonwoo-Kim(wonwoo.kim@lge.com) [P8/IMT/2012-0099] Data Usage for foreground countin
+g [START]*/
 static unsigned int proc_ctrl_perms = S_IRUGO | S_IWUGO;
+/*2012-09-25 Sir.Wonwoo-Kim(wonwoo.kim@lge.com) [P8/IMT/2012-0099] Data Usage for foreground countin
+g [END]*/
 #else
 static unsigned int proc_ctrl_perms = S_IRUGO | S_IWUSR;
 #endif

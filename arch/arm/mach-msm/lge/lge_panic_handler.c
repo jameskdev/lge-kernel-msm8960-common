@@ -24,6 +24,8 @@
 #include <linux/persistent_ram.h>
 #include <asm/setup.h>
 #include <mach/board_lge.h>
+#include <linux/init.h>
+#include <mach/msm_iomap.h>
 
 #include <mach/subsystem_restart.h>
 #ifdef CONFIG_CPU_CP15_MMU
@@ -176,8 +178,14 @@ void store_crash_log(char *p)
 {
 	if (!crash_store_flag)
 		return;
+
+	if (crash_dump_log->size >= (crash_buf_size - 3))
+		crash_dump_log->size = 0;
+	#if 0
 	if (crash_dump_log->size == crash_buf_size)
 		return;
+	#endif
+	
 	for ( ; *p; p++) {
 		if (*p == '[') {
 			for ( ; *p != ']'; p++)
@@ -186,15 +194,20 @@ void store_crash_log(char *p)
 			if (*p == ' ')
 				p++;
 		}
+		
 		if (*p == '<') {
 			for ( ; *p != '>'; p++)
 				;
 			p++;
 		}
+		
 		crash_dump_log->buffer[crash_dump_log->size] = *p;
 		crash_dump_log->size++;
+
+		if (crash_dump_log->size >= (crash_buf_size - 2))
+			break;
 	}
-	crash_dump_log->buffer[crash_dump_log->size] = 0;
+	crash_dump_log->buffer[crash_dump_log->size++] = 0;
 
 	return;
 }
@@ -244,22 +257,99 @@ static struct notifier_block panic_handler_block = {
 	.notifier_call = restore_crash_log,
 };
 
+#ifdef CONFIG_LGE_HIDDEN_RESET
+#define HRESET_MAGIC  0x12345678;
+
+struct hidden_reset_flag {
+	unsigned int magic_key;
+	unsigned long fb_addr;
+	unsigned long fb_size;
+};
+
+struct hidden_reset_flag *hreset_flag = NULL;
+
+int hreset_enable = 0;
+static int hreset_enable_set(const char *val, struct kernel_param *kp)
+{
+	int ret;
+
+	ret = param_set_int(val, kp);
+	if (ret)
+		return ret;
+
+	if (hreset_enable) {
+		if (hreset_flag)
+			hreset_flag->magic_key = HRESET_MAGIC;
+		pr_info("hidden reset activated\n");
+
+		/* clear dload magic */
+		__raw_writel(0, MSM_IMEM_BASE);
+		__raw_writel(0, MSM_IMEM_BASE + 4);
+	} else {
+		if (hreset_flag)
+			hreset_flag->magic_key = 0;
+		pr_info("hidden reset deactivated\n");
+	}
+
+	return 0;
+}
+module_param_call(hreset_enable, hreset_enable_set, param_get_int,
+	&hreset_enable, S_IRUGO|S_IWUSR|S_IWGRP);
+
+int on_hidden_reset = 0;
+module_param_named(on_hidden_reset, on_hidden_reset,
+		int, S_IRUGO|S_IWUSR|S_IWGRP);
+
+static int __init check_hidden_reset(char *reset_mode)
+{
+	if( !strncmp(reset_mode, "on", 2) ) {
+		on_hidden_reset = 1;
+		printk(KERN_INFO "reboot mode : hidden reset %s\n", "on");
+	}
+	return 1;
+}
+__setup("lge.hreset=", check_hidden_reset);
+
+static ssize_t is_hidden_show(struct device *dev, struct device_attribute *addr,
+	char *buf)
+{
+	return sprintf(buf, "%d\n", on_hidden_reset);
+}
+
+static DEVICE_ATTR(is_hreset, S_IRUGO|S_IWUSR|S_IWGRP, is_hidden_show, NULL);
+#endif
+
 static int __init panic_handler_probe(struct platform_device *pdev)
 {
-	struct persistent_ram_zone *prz;
+	struct resource *res = pdev->resource;
+	size_t start;
 	size_t buffer_size;
 	void *buffer;
 	int ret = 0;
 #ifdef CONFIG_CPU_CP15_MMU
 	void *ctx_buf;
+	size_t ctx_start;
+#endif
+#ifdef CONFIG_LGE_HIDDEN_RESET
+	void *hreset_flag_buf;
 #endif
 
-	prz = persistent_ram_init_ringbuffer(&pdev->dev, false);
-	if (IS_ERR(prz))
-		return PTR_ERR(prz);
-
-	buffer_size = prz->buffer_size - SZ_1K;
-	buffer = (void *)prz->buffer;;
+	if (res == NULL || pdev->num_resources != 1 ||
+			!(res->flags & IORESOURCE_MEM)) {
+		printk(KERN_ERR "lge_panic_handler: invalid resource, %p %d flags "
+				"%lx\n", res, pdev->num_resources, res ? res->flags : 0);
+		return -ENXIO;
+	}
+	
+	buffer_size = res->end - res->start + 1;
+	start = res->start;
+	printk(KERN_INFO "lge_panic_handler: got buffer at %zx, size %zx\n",
+			start, buffer_size);
+	buffer = ioremap(res->start, buffer_size);
+	if(buffer == NULL) {
+		printk(KERN_ERR "lge_panic_handler: failed to map memory\n");
+		return -ENOMEM;
+	}
 
 	crash_dump_log = (struct crash_log_dump *)buffer;
 	memset(crash_dump_log, 0, buffer_size);
@@ -267,9 +357,42 @@ static int __init panic_handler_probe(struct platform_device *pdev)
 	crash_dump_log->size = 0;
 	crash_buf_size = buffer_size - offsetof(struct crash_log_dump, buffer);
 #ifdef CONFIG_CPU_CP15_MMU
-	ctx_buf = (void *)(buffer + buffer_size);
+	ctx_start = res->end + 1;
+	ctx_buf = ioremap(ctx_start, SZ_1K);
+	if (ctx_buf == NULL) {
+		printk(KERN_ERR "cpu crash ctx buffer: failed to map memory\n");
+		return -ENOMEM;
+	}
 	cpu_crash_ctx = (unsigned long *)ctx_buf;
 #endif
+
+#ifdef CONFIG_LGE_HIDDEN_RESET
+	hreset_flag_buf = ioremap((res->end + 1024 + 1), 1024);
+	if (!hreset_flag_buf) {
+		pr_err("hreset flag buffer: failed to map memory\n");
+		return -ENOMEM;
+	}
+
+	hreset_flag = (struct hidden_reset_flag *)hreset_flag_buf;
+
+	ret = device_create_file(&pdev->dev, &dev_attr_is_hreset);
+	if( ret < 0 ) {
+		printk(KERN_ERR "device_create_file error!\n");
+		return ret;
+	}
+
+	if (hreset_enable) {
+		hreset_flag->magic_key = HRESET_MAGIC;
+	} else {
+		hreset_flag->magic_key = 0;
+	}
+
+	if (lge_get_fb_phys_info(&hreset_flag->fb_addr, &hreset_flag->fb_size)) {
+		hreset_flag->magic_key = 0;
+		pr_err("hreset_flag: failed to get_fb_phys_info\n");
+	}
+#endif
+
 	atomic_notifier_chain_register(&panic_notifier_list,
 			&panic_handler_block);
 	return ret;

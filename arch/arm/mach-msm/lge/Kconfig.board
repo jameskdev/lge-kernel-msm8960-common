@@ -6,3 +6,23 @@ source "arch/arm/mach-msm/lge/mako/Kconfig"
 
 config MACH_LGE_DUMMY
 	bool "NONE (No device)"
+# D1L
+source "arch/arm/mach-msm/lge/d1l/Kconfig"
+
+# D1L_KR
+source "arch/arm/mach-msm/lge/d1l_kr/Kconfig"
+
+# L_DCM
+source "arch/arm/mach-msm/lge/l_dcm/Kconfig"
+
+# LX(L0/L2/L1)
+source "arch/arm/mach-msm/lge/lx/Kconfig"
+
+# FX1(FX1E/FX1A/FX1T/FX1S/FX1V/FX1SU/FX1SK)
+source "arch/arm/mach-msm/lge/fx1/Kconfig"
+
+# L1v
+source "arch/arm/mach-msm/lge/l1/Kconfig"
+
+# VU2
+source "arch/arm/mach-msm/lge/vu2/Kconfig"

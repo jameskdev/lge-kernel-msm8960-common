@@ -63,3 +63,6 @@ obj-$(CONFIG_BOSCH_BMA150)              += bma150.o
 obj-$(CONFIG_STM_LIS3DH)		+= lis3dh_acc.o
 obj-$(CONFIG_BMP18X)			+= bmp18x-core.o
 obj-$(CONFIG_BMP18X_I2C)		+= bmp18x-i2c.o
+# dongwook.lee@lge.com
+obj-$(CONFIG_LGE_COMPRESSED_PATH)	+= amas_hdmi_control.o
+obj-$(CONFIG_LGE_IRRC) += lge_uei_irrc.o

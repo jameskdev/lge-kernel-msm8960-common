@@ -1882,6 +1882,13 @@ config VMALLOC_RESERVE
 	help
 	  Reserved vmalloc space if not specified on the kernel commandline.
 
+config LGE_VMALLOC_TOTAL_SIZE
+	int "Reserved vmalloc space"
+	default 240
+	depends on MMU
+	help
+	  Reserved vmalloc space if not specified on the kernel commandline
+  
 source "mm/Kconfig"
 
 config ARCH_MEMORY_PROBE

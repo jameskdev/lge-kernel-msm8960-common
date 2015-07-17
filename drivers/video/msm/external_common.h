@@ -63,6 +63,7 @@ struct external_common_state_type {
 	boolean pre_suspend_hpd_state;
 	struct kobject *uevent_kobj;
 	uint32 video_resolution;
+	boolean default_res_supported;
 	struct device *dev;
 	struct switch_dev sdev;
 	struct switch_dev audio_sdev;
@@ -91,6 +92,9 @@ struct external_common_state_type {
 	int sadb_size;
 	int (*read_edid_block)(int block, uint8 *edid_buf);
 	int (*hpd_feature)(int on);
+#endif
+#ifdef CONFIG_MACH_LGE
+	boolean boot_completed;
 #endif
 };
 

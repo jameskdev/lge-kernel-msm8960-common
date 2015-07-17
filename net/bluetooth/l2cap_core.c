@@ -814,8 +814,16 @@ void l2cap_send_disconn_req(struct l2cap_conn *conn, struct sock *sk, int err)
 {
 	struct l2cap_disconn_req req;
 
+/*+s LGBT_COMMON_AVOID_NULLPOINTER , avoid null pointer when disconnecting ,hseok.kim 2012-09-15*/
+	if (!conn || !conn->hcon)
+	{
+		return;
+	}
+/* Qualcomm Original
 	if (!conn)
 		return;
+*/
+/*+e LGBT_COMMON_AVOID_NULLPOINTER */
 
 	sk->sk_send_head = NULL;
 	skb_queue_purge(TX_QUEUE(sk));

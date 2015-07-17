@@ -27,6 +27,9 @@
 
 #define PM8XXX_PWM_CHANNELS		3
 
+#ifdef CONFIG_MACH_MSM8960_VU2
+#include <linux/delay.h>
+#endif
 /*
  * For the lack of better term to distinguish functional
  * differences, hereby, LPG version 0 (V0, v0) denotes

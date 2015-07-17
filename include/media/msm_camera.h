@@ -1024,7 +1024,12 @@ struct msm_snapshot_pp_status {
 #define CFG_SET_VISION_AE             56
 #define CFG_HDR_UPDATE                57
 #define CFG_ACTUAOTOR_REG_INIT        58
-#define CFG_MAX                       59
+// LGE_CHNAGE_S sungsik.kim 2012/11/07 {
+// for YUV sensor[JB]
+#define CFG_SET_SOC_FPS               59
+// LGE_CHNAGE_E sungsik.kim 2012/11/07 }
+
+#define CFG_MAX                       60
 
 
 #define MOVE_NEAR	0
@@ -1213,12 +1218,13 @@ enum msm_v4l2_power_line_frequency {
 };
 
 #define CAMERA_ISO_TYPE_AUTO           0
-#define CAMEAR_ISO_TYPE_HJR            1
-#define CAMEAR_ISO_TYPE_100            2
+#define CAMERA_ISO_TYPE_HJR            1
+#define CAMERA_ISO_TYPE_100            2
 #define CAMERA_ISO_TYPE_200            3
 #define CAMERA_ISO_TYPE_400            4
-#define CAMEAR_ISO_TYPE_800            5
+#define CAMERA_ISO_TYPE_800            5
 #define CAMERA_ISO_TYPE_1600           6
+#define CAMERA_ISO_TYPE_DEFAULT     7
 
 struct sensor_pict_fps {
 	uint16_t prevfps;
@@ -1242,6 +1248,15 @@ struct fps_cfg {
 	uint16_t fps_div;
 	uint32_t pict_fps_div;
 };
+
+// LGE_CHNAGE_S sungsik.kim 2012/11/07 {
+// for YUV sensor[JB]
+struct fps_minmax_cfg {
+       uint8_t minfps;
+       uint8_t maxfps;
+};
+// LGE_CHNAGE_E sungsik.kim 2012/11/07 }
+
 struct wb_info_cfg {
 	uint16_t red_gain;
 	uint16_t green_gain;
@@ -1286,6 +1301,21 @@ struct sensor_init_cfg {
 	uint8_t pict_res;
 };
 
+//Start :randy@qualcomm.com for calibration 2012.04.15
+#define ROLLOFF_CALDATA_SIZE    (17 * 13)
+typedef struct
+{
+	unsigned short           mesh_rolloff_table_size;     // TableSize
+	uint8_t                  r_gain[ROLLOFF_CALDATA_SIZE];   // RGain
+	uint8_t                  gr_gain[ROLLOFF_CALDATA_SIZE];  // GRGain
+	uint8_t                  gb_gain[ROLLOFF_CALDATA_SIZE];  // GBGain
+	uint8_t                  b_gain[ROLLOFF_CALDATA_SIZE];   // BGain
+	uint8_t                                  red_ref[17];
+
+} rolloff_caldata_array_type;
+
+
+
 struct sensor_calib_data {
 	/* Color Related Measurements */
 	uint16_t r_over_g;
@@ -1298,7 +1328,12 @@ struct sensor_calib_data {
 	uint16_t stroke_amt;
 	uint16_t af_pos_1m;
 	uint16_t af_pos_inf;
+
+	/* Lens Shading Calibration Data */
+	rolloff_caldata_array_type rolloff;
+
 };
+//End :randy@qualcomm.com for calibration 2012.04.15
 
 enum msm_sensor_resolution_t {
 	MSM_SENSOR_RES_FULL,
@@ -1684,6 +1719,11 @@ struct sensor_cfg_data {
 		void *setting;
 		int32_t vision_mode_enable;
 		int32_t vision_ae;
+// LGE_CHNAGE_S sungsik.kim 2012/11/07 {
+// for YUV sensor[JB]
+		struct fps_minmax_cfg fps_range;
+// LGE_CHNAGE_E sungsik.kim 2012/11/07 }
+		
 	} cfg;
 };
 
@@ -1756,6 +1796,9 @@ struct msm_actuator_move_params_t {
 	int8_t sign_dir;
 	int16_t dest_step_pos;
 	int32_t num_steps;
+/* LGE_CHANGE_S, AF offset enable, 2012-09-28, sungmin.woo@lge.com */
+	int32_t af_status;
+/* LGE_CHANGE_E, AF offset enable, 2012-09-28, sungmin.woo@lge.com */
 	struct damping_params_t *ringing_params;
 };
 
@@ -1835,6 +1878,12 @@ struct msm_calib_wb {
 	uint16_t gr_over_gb;
 };
 
+#if 1 // LGE_BSP_CAMERA::kyounghoon.noh@lge.com 2012-08-14
+struct msm_calib_ver {
+	uint16_t cal_ver; // rafal47 0813
+};
+#endif
+
 struct msm_calib_af {
 	uint16_t macro_dac;
 	uint16_t inf_dac;
@@ -1865,6 +1914,7 @@ struct msm_calib_raw {
 	uint32_t size;
 };
 
+#if defined(CONFIG_S5K4E5YA_EEPROM)
 struct msm_camera_eeprom_info_t {
 	struct msm_eeprom_support af;
 	struct msm_eeprom_support wb;
@@ -1872,6 +1922,25 @@ struct msm_camera_eeprom_info_t {
 	struct msm_eeprom_support dpc;
 	struct msm_eeprom_support raw;
 };
+#elif defined(CONFIG_IMX091_EEPROM)
+struct msm_camera_eeprom_info_t {
+	struct msm_eeprom_support af;
+	struct msm_eeprom_support wb;
+	struct msm_eeprom_support lsc;
+	struct msm_eeprom_support dpc;
+	struct msm_eeprom_support cal_ver; // Start LGE_BSP_CAMERA::kyounghoon.noh@lge.com 2012-08-14
+	struct msm_eeprom_support raw;
+};
+#else
+struct msm_camera_eeprom_info_t {
+	struct msm_eeprom_support af;
+	struct msm_eeprom_support wb;
+	struct msm_eeprom_support lsc;
+	struct msm_eeprom_support dpc;
+	struct msm_eeprom_support cal_ver; // Start LGE_BSP_CAMERA::kyounghoon.noh@lge.com 2012-08-14
+	struct msm_eeprom_support raw;
+};
+#endif
 
 struct msm_eeprom_cfg_data {
 	int cfgtype;

@@ -361,6 +361,7 @@ void *pil_get(const char *name)
 	struct pil_device *pil;
 	struct pil_device *pil_d;
 	void *retval;
+	int retries = 0;
 
 	if (!name)
 		return NULL;
@@ -381,7 +382,15 @@ void *pil_get(const char *name)
 
 	mutex_lock(&pil->lock);
 	if (!pil->count) {
+	if (!strcmp(pil->desc->name, "wcnss")) {
+		for (retries = 0; retries < 3; retries ++) {			
+			ret = load_image(pil);
+			dev_info(&pil->dev, "WCNSS image load retries : %d ret :%d\n",retries, ret);
+			if (ret == 0) break;
+		}
+	} else {		
 		ret = load_image(pil);
+	}
 		if (ret) {
 			retval = ERR_PTR(ret);
 			goto err_load;
@@ -431,8 +440,14 @@ void pil_put(void *peripheral_handle)
 	if (WARN(!pil->count, "%s: %s: Reference count mismatch\n",
 			pil->desc->name, __func__))
 		goto err_out;
-	if (!--pil->count)
-		pil_shutdown(pil);
+	if (!--pil->count) { 
+		if (!!strncmp("modem", pil->desc->name, 5)) //ALRAN : - allow pil_put only for not modem* 
+			pil_shutdown(pil); 
+		else { 
+			pil->count++; 
+			}
+		}
+ 
 	mutex_unlock(&pil->lock);
 
 	pil_d = find_peripheral(pil->desc->depends_on);

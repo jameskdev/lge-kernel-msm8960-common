@@ -1,0 +1,23 @@
+config BOARD_HEADER_FILE
+	string "LGE board specific header file name"
+	default ""
+
+config MACH_MSM8960_D1L
+	depends on ARCH_MSM8960
+	select MACH_LGE
+	bool "MSM8960 D1L"
+	help
+	  Support for the LGE MSM8960 D1L device.
+
+choice
+	depends on MACH_MSM8960_D1L
+	prompt "D1L Board Selection"
+	default MACH_MSM8960_D1LV
+
+config MACH_MSM8960_D1LV
+	bool "MSM8960 D1L Verizon"
+	help
+	  Support for the LGE MSM8960 D1L Verizon device.
+
+endchoice
+

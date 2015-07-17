@@ -815,6 +815,28 @@ static void msm_hsl_set_termios(struct uart_port *port,
 	/* calculate and set baud rate */
 	baud = uart_get_baud_rate(port, termios, old, 300, 460800);
 
+/* 20111205, chaeuk.lee@lge.com, Add IrDA UART [START]
+ * Set UART for IrDA
+ * 0x03 : UART_IRDA | RX_INVERT
+ * [CAUTION] UARTDM register must be set AFTER UARTDM clock has been set
+ */
+#ifdef CONFIG_LGE_IRDA
+	if(port->line == 2){
+		msm_hsl_write(port, 0x03, UARTDM_IRDA_ADDR);
+	}
+#endif
+/* 20111205, chaeuk.lee@lge.com, Add IrDA UART [END] */
+/*  20120704, sukkkong.kim@lge.com, Add IRRC UART [START]
+ * Set UART for IRRC
+ * 0x03 : UART_DM_EN
+ * [CAUTION] UARTDM register must be set AFTER UARTDM clock has been set
+ */
+#ifdef CONFIG_LGE_IRRC
+	if(port->line == 1){
+		termios->c_cflag |= B19200;
+		}
+#endif
+/* 20120704, sukkkong.kim@lge.com, Add IRRC UART [END] */
 	msm_hsl_set_baud_rate(port, baud);
 
 	vid = UART_TO_MSM(port)->ver_id;
@@ -999,9 +1021,11 @@ static void msm_hsl_power(struct uart_port *port, unsigned int state,
 {
 	int ret;
 	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+#ifndef CONFIG_LGE_IRRC
 	struct platform_device *pdev = to_platform_device(port->dev);
 	const struct msm_serial_hslite_platform_data *pdata =
 					pdev->dev.platform_data;
+#endif
 
 	switch (state) {
 	case 0:
@@ -1013,11 +1037,18 @@ static void msm_hsl_power(struct uart_port *port, unsigned int state,
 		break;
 	case 3:
 		clk_en(port, 0);
+#ifndef CONFIG_LGE_IRRC
 		if (pdata && pdata->set_uart_clk_zero) {
 			ret = clk_set_rate(msm_hsl_port->clk, 0);
 			if (ret)
 				pr_err("Error setting UART clock rate to zero.\n");
 		}
+#else
+		ret = clk_set_rate(msm_hsl_port->clk, 0);
+		if (ret)
+			pr_err("Error setting UART clock rate to zero.\n");
+#endif
+
 		break;
 	default:
 		pr_err("%s(): msm_serial_hsl: Unknown PM state %d\n",

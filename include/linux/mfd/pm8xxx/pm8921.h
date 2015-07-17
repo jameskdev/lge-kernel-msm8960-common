@@ -121,6 +121,8 @@
 #define PM8921_LVS1_OCP_IRQ		PM8921_IRQ_BLOCK_BIT(13, 1)
 #define PM8921_HDMI_MVS_OCP_IRQ		PM8921_IRQ_BLOCK_BIT(13, 0)
 
+#define PM8921_CABLE_IRQ 	PM8921_IRQ_BLOCK_BIT(4, 3)
+ 
 /* PMIC I/O Resources */
 #define PM8921_RTC_BASE 0x11D
 
@@ -142,6 +144,10 @@ struct pm8921_platform_data {
 	struct pm8xxx_vibrator_platform_data	*vibrator_pdata;
 	struct pm8xxx_ccadc_platform_data	*ccadc_pdata;
 	struct pm8xxx_pwm_platform_data		*pwm_pdata;
+#ifdef CONFIG_LGE_DIRECT_QCOIN_VIBRATOR
+	struct direct_qcoin_platform_data       *pm8xxx_qcoin_pdata;
+#endif
 };
 
+extern int pm8921_cbl_pwr_status(void);
 #endif

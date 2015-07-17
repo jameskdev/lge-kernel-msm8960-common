@@ -86,12 +86,6 @@ void enable_hlt(void)
 
 EXPORT_SYMBOL(enable_hlt);
 
-int get_hlt(void)
-{
-	return hlt_counter;
-}
-EXPORT_SYMBOL(get_hlt);
-
 static int __init nohlt_setup(char *__unused)
 {
 	hlt_counter = 1;
@@ -144,9 +138,21 @@ void arm_machine_flush_console(void)
  */
 static u64 soft_restart_stack[16];
 
+/* 2012-03-07 jinkyu.choi@lge.com
+ * call pet_watchdog
+ * for avoiding apps watchdog bark while rebooting sequence
+ */
+#ifdef CONFIG_MACH_LGE
+extern void pet_watchdog(void);
+#endif
+
 static void __soft_restart(void *addr)
 {
 	phys_reset_t phys_reset;
+
+#ifdef CONFIG_MACH_LGE
+	pet_watchdog();
+#endif
 
 	/* Take out a flat memory mapping. */
 	setup_mm_for_reboot();
@@ -335,6 +341,9 @@ void machine_power_off(void)
 
 void machine_restart(char *cmd)
 {
+#ifdef CONFIG_MACH_LGE
+	preempt_disable();
+#endif
 	machine_shutdown();
 
 	/* Flush the console to make sure all the relevant messages make it
@@ -342,6 +351,9 @@ void machine_restart(char *cmd)
 	arm_machine_flush_console();
 
 	arm_pm_restart(reboot_mode, cmd);
+#ifdef CONFIG_MACH_LGE
+	preempt_enable();
+#endif
 
 	/* Give a grace period for failure to restart of 1s */
 	mdelay(1000);

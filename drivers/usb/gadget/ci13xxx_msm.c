@@ -104,12 +104,20 @@ static irqreturn_t ci13xxx_msm_resume_irq(int irq, void *data)
 
 static struct ci13xxx_udc_driver ci13xxx_msm_udc_driver = {
 	.name			= "ci13xxx_msm",
-	.flags			= CI13XXX_REGS_SHARED |
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+       .flags            = CI13XXX_REGS_SHARED |
+                               CI13XXX_REQUIRE_TRANSCEIVER |
+                               CI13XXX_PULLUP_ON_VBUS |
+                               CI13XXX_ZERO_ITC |
+                               CI13XXX_DISABLE_STREAMING,
+#else
+	.flags	      = CI13XXX_REGS_SHARED |
 				  CI13XXX_REQUIRE_TRANSCEIVER |
 				  CI13XXX_PULLUP_ON_VBUS |
 				  CI13XXX_ZERO_ITC |
 				  CI13XXX_DISABLE_STREAMING |
 				  CI13XXX_IS_OTG,
+#endif
 
 	.notify_event		= ci13xxx_msm_notify_event,
 };
@@ -233,16 +241,10 @@ int ci13xxx_msm_remove(struct platform_device *pdev)
 	return 0;
 }
 
-void ci13xxx_msm_shutdown(struct platform_device *pdev)
-{
-	ci13xxx_pullup(&_udc->gadget, 0);
-}
-
 static struct platform_driver ci13xxx_msm_driver = {
 	.probe = ci13xxx_msm_probe,
 	.driver = { .name = "msm_hsusb", },
 	.remove = ci13xxx_msm_remove,
-	.shutdown = ci13xxx_msm_shutdown,
 };
 MODULE_ALIAS("platform:msm_hsusb");
 
@@ -250,7 +252,11 @@ static int __init ci13xxx_msm_init(void)
 {
 	return platform_driver_register(&ci13xxx_msm_driver);
 }
+#ifdef CONFIG_LGE_PM
+device_initcall_sync(ci13xxx_msm_init);
+#else
 module_init(ci13xxx_msm_init);
+#endif
 
 static void __exit ci13xxx_msm_exit(void)
 {

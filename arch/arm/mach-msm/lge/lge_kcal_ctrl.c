@@ -25,6 +25,9 @@
 static struct kcal_platform_data *kcal_pdata;
 static int last_status_kcal_ctrl;
 
+#if defined (CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT)
+extern bool lgit_change_panel;
+#endif
 static ssize_t kcal_store(struct device *dev, struct device_attribute *attr,
 						const char *buf, size_t count)
 {
@@ -61,8 +64,13 @@ static ssize_t kcal_ctrl_store(struct device *dev,
 
 	sscanf(buf, "%d", &cmd);
 
-	if(cmd != 1)
+	if(cmd != 1){
+#if defined (CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT)
+		if (cmd == 7)
+			lgit_change_panel = !lgit_change_panel;
+#endif
 		return last_status_kcal_ctrl = -EINVAL;
+	};
 
 	last_status_kcal_ctrl = kcal_pdata->refresh_display();
 

@@ -389,6 +389,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	int err;
 	struct mmc_command cmd = {0};
 	unsigned long timeout;
+
 	u32 status;
 
 	BUG_ON(!card);
@@ -434,6 +435,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 				mmc_hostname(card->host), __func__);
 			return -ETIMEDOUT;
 		}
+
 	} while (R1_CURRENT_STATE(status) == R1_STATE_PRG);
 
 	if (mmc_host_is_spi(card->host)) {

@@ -39,6 +39,7 @@
 
 #include "smd_private.h"
 #include "acpuclock.h"
+#include "clock.h"
 
 #define A11S_CLK_CNTL_ADDR (MSM_CSR_BASE + 0x100)
 #define A11S_CLK_SEL_ADDR (MSM_CSR_BASE + 0x104)

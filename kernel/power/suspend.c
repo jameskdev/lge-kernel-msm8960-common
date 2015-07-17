@@ -26,6 +26,13 @@
 #include <linux/syscore_ops.h>
 #include <linux/rtc.h>
 #include <trace/events/power.h>
+#ifdef CONFIG_LGE_LOG_SERVICE
+#include <linux/rtc.h>
+#endif
+
+#ifdef CONFIG_MACH_LGE
+#include <mach/lge_blocking_monitor.h>
+#endif
 
 #include "power.h"
 
@@ -37,7 +44,15 @@ const char *const pm_states[PM_SUSPEND_MAX] = {
 	[PM_SUSPEND_MEM]	= "mem",
 };
 
+#ifdef CONFIG_LGE_LOG_SERVICE
+static int sleep_enter = 0;
+#endif
+
 static const struct platform_suspend_ops *suspend_ops;
+
+#ifdef CONFIG_MACH_LGE
+static int suspend_monitor_id;
+#endif
 
 /**
  * suspend_set_ops - Set the global suspend method table.
@@ -176,6 +191,9 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 			events_check_enabled = false;
 		}
 		syscore_resume();
+#ifdef CONFIG_LGE_LOG_SERVICE
+		sleep_enter = 1;
+#endif
 	}
 
 	arch_suspend_enable_irqs();
@@ -234,6 +252,18 @@ int suspend_devices_and_enter(suspend_state_t state)
  Resume_devices:
 	suspend_test_start();
 	dpm_resume_end(PMSG_RESUME);
+#ifdef CONFIG_LGE_LOG_SERVICE
+	if(sleep_enter == 1){
+		struct timespec ts;
+		struct rtc_time tm;
+		getnstimeofday(&ts);
+		rtc_time_to_tm(ts.tv_sec, &tm);
+		printk(KERN_UTC_WAKEUP "%d-%02d-%02d %02d:%02d:%02d.%06lu\n",
+				tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+				tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec/1000);
+		sleep_enter = 0;
+	}
+#endif
 	suspend_test_finish("resume devices");
 	resume_console();
  Close:
@@ -295,7 +325,14 @@ static int enter_state(suspend_state_t state)
 
  Finish:
 	pr_debug("PM: Finishing wakeup.\n");
+#ifdef CONFIG_MACH_LGE
+	start_monitor_blocking(suspend_monitor_id,
+		jiffies + usecs_to_jiffies(3000000));
+#endif
 	suspend_finish();
+#ifdef CONFIG_MACH_LGE
+	end_monitor_blocking(suspend_monitor_id);
+#endif
  Unlock:
 	mutex_unlock(&pm_mutex);
 	return error;
@@ -339,3 +376,17 @@ int pm_suspend(suspend_state_t state)
 	return error;
 }
 EXPORT_SYMBOL(pm_suspend);
+
+#ifdef CONFIG_MACH_LGE
+static int __init create_suspend_blocking_monitor(void)
+{
+	suspend_monitor_id = create_blocking_monitor("suspend");
+
+	if (suspend_monitor_id < 0)
+		return suspend_monitor_id;
+
+	return 0;
+}
+
+late_initcall(create_suspend_blocking_monitor);
+#endif

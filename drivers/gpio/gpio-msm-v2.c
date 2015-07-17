@@ -148,10 +148,19 @@ unsigned __msm_gpio_get_intr_config(unsigned gpio)
 void __msm_gpio_set_intr_cfg_enable(unsigned gpio, unsigned val)
 {
 	if (val) {
+#if defined (CONFIG_MACH_MSM8960_L1v) || defined (CONFIG_MACH_MSM8960_FX1)
+		set_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
+		__raw_writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(gpio));
+#else
 		set_gpio_bits(INTR_ENABLE, GPIO_INTR_CFG(gpio));
-
+#endif
 	} else {
+#if defined (CONFIG_MACH_MSM8960_L1v) || defined (CONFIG_MACH_MSM8960_FX1)
+		__raw_writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(gpio));
+		clr_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
+#else
 		clr_gpio_bits(INTR_ENABLE, GPIO_INTR_CFG(gpio));
+#endif
 	}
 }
 
@@ -164,6 +173,9 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type)
 {
 	unsigned cfg;
 
+#if defined (CONFIG_MACH_MSM8960_L1v) || defined (CONFIG_MACH_MSM8960_FX1)
+	// do nothing
+#else
 	/* RAW_STATUS_EN is left on for all gpio irqs. Due to the
 	 * internal circuitry of TLMM, toggling the RAW_STATUS
 	 * could cause the INTR_STATUS to be set for EDGE interrupts.
@@ -172,7 +184,7 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type)
 	cfg |= INTR_RAW_STATUS_EN;
 	__raw_writel(cfg, GPIO_INTR_CFG(gpio));
 	__raw_writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(gpio));
-
+#endif
 	cfg  = __msm_gpio_get_intr_config(gpio);
 	if (type & IRQ_TYPE_EDGE_BOTH)
 		cfg |= INTR_DECT_CTL_EDGE;
@@ -190,7 +202,11 @@ void __msm_gpio_set_intr_cfg_type(unsigned gpio, unsigned type)
 	 * We clear the interrupt status before enabling the
 	 * interrupt in the unmask call-back.
 	 */
+#if defined (CONFIG_MACH_MSM8960_L1v) || defined (CONFIG_MACH_MSM8960_FX1)
+			// do nothing
+#else
 	udelay(5);
+#endif
 }
 
 void __gpio_tlmm_config(unsigned config)

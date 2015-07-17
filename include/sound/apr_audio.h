@@ -791,6 +791,10 @@ struct adm_copp_open_respond {
 #define ASM_SERVICE_CMD_GET_WALLCLOCK_TIME               0x00010C19
 #define ASM_DATA_CMDRSP_EOS                              0x00010C1C
 
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+#define ASM_DATA_EVENT_RENDERED_EOS       ASM_DATA_CMDRSP_EOS
+#endif
+
 /* ASM Data structures */
 
 /* common declarations */
@@ -1216,6 +1220,22 @@ struct asm_stream_cmd_open_write_compressed {
 	u32	flags;
 	u32	format;
 } __packed;
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+#define ASM_SESSION_CMD_CONNECT_AFE_PORT                      0x00010D85
+struct asm_session_cmd_connect_afe_port{
+	struct apr_hdr     hdr;
+	u16	port_id;
+	u16 reserved;
+} __attribute__((packed));
+
+#define ASM_DATA_CMD_IEC_60958_FRAME_RATE                      0x00010D87
+
+struct asm_stream_cmd_iec_60958_frame_rate_write{
+	struct apr_hdr     hdr;
+	u32	framerate;
+} __attribute__((packed));
+
+#endif
 
 #define ASM_STREAM_CMD_OPEN_READWRITE                    0x00010BCC
 

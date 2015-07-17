@@ -35,8 +35,12 @@ again:
 		struct iphdr _iph;
 ip:
 		iph = skb_header_pointer(skb, nhoff, sizeof(_iph), &_iph);
-		if (!iph)
+		
+        /* 2014-01-21 heeyeon.nah@lge.com, LGE_DATA_google_security_patch [START] */
+		//if (!iph)		
+        if (!iph || iph->ihl < 5)
 			return false;
+        /* 2014-01-21 heeyeon.nah@lge.com, LGE_DATA_google_security_patch [END] */
 
 		if (ip_is_fragment(iph))
 			ip_proto = 0;

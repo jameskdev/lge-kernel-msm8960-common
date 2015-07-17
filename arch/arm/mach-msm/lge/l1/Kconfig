@@ -1,0 +1,28 @@
+config BOARD_HEADER_FILE
+	string "LGE board specific header file name"
+	default ""
+
+config MACH_MSM8960_L1
+	depends on ARCH_MSM8960
+	select MACH_LGE
+	bool "MSM8960 L1"
+	help
+	  Support for the LGE MSM8960 L-PROJECT device.
+
+choice
+	depends on MACH_MSM8960_L1
+	prompt "L-PROJECT Board Selection"
+	default MACH_MSM8960_L1m
+
+config MACH_MSM8960_L1m
+	bool "MSM8960 L1m MPCS"
+	help
+	  Support for the LGE MSM8960 L1m MPCS device.	  
+
+config MACH_MSM8960_L1v
+	bool "MSM8960 L1v VZW"
+	help
+	  Support for the LGE MSM8960 L1v VZW device.	  
+
+endchoice
+

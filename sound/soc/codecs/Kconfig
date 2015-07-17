@@ -449,8 +449,44 @@ config SND_SOC_TPA6130A2
 config SND_SOC_MSM_STUB
 	tristate
 
+# CONFIG_LGE_AUDIO	2011.01..tarzan.park@lge.com
+config LGE_AUDIO
+	default y
+	bool "LGE Audio Configuration"
+	help
+		LGE AUDIO Configuration
+	
 config SND_SOC_TPA2028D
 	bool "Audio subsystem TPA2028D"
 	default n
 	help
 	  Texas Instruments 3W Mono Class-D Audio Amplifier
+# Audio driver configuration
+comment "Audio driver Selection"
+
+#rename LGE_AUDIO_TPA2080D to SND_SOC_TPA2028D by qct
+#config LGE_AUDIO_TPA2028D
+#        bool "Audio subsystem TPA2028D"
+#        default n
+#        ---help---
+#                Texas Instruments 3W Mono Class-D Audio Amplifier
+
+config L1_EU_TPA2028D_CAL
+        bool "L1 EU model TPA2028D Calibration"
+        default n
+        ---help---
+                L1 EU model TPA2028D Calibration define
+
+# LGE_BSP_AUDIO, jeremy.pi@lge.com, 2012-07-20, earSmart eS310 Voice Processor.
+config EARSMART_310
+	bool "Audience ES310 Dual Mic Noise Reduction"	 
+	default n
+	help
+		Audience ES310 Dual Mic Noise Reduction
+
+# LGE_BSP_AUDIO, jeremy.pi@lge.com, 2012-09-20, Broadcom Bluetooth RF Silicon Audio.
+config BROADCOM_BT_AUDIO
+	bool "Broadcom Bluetooth RF Silicon Audio"	 
+	default n
+	help
+		Broadcom Bluetooth RF Silicon Audio

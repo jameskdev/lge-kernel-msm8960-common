@@ -48,6 +48,16 @@ struct msm_serial_hs_platform_data {
 	int uartdm_rx_buf_size;
 };
 
+//BEGIN: 0019639 chanha.park@lge.com 2012-06-16
+//ADD: 0019639: [F200][BT] Support Bluetooth low power mode
+#ifdef CONFIG_LGE_BLUESLEEP
+#define CLOCK_REQUEST_AVAILABLE 	0
+#define CLOCK_REQUEST_UNAVAILABLE 	1
+struct uart_port * msm_hs_get_bt_uport(unsigned int line);
+int msm_hs_get_bt_uport_clock_state(struct uart_port *uport);
+#endif/*CONFIG_LGE_BLUESLEEP*/
+//END: 0019639 chanha.park@lge.com 2012-06-16
+
 unsigned int msm_hs_tx_empty(struct uart_port *uport);
 void msm_hs_request_clock_off(struct uart_port *uport);
 void msm_hs_request_clock_on(struct uart_port *uport);

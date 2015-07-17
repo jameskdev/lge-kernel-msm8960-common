@@ -19,7 +19,11 @@ bool mhl_is_connected(void);
 #else
 static bool mhl_is_connected(void)
 {
+#ifdef CONFIG_MACH_LGE
+	return true;
+#else
 	return false;
+#endif
 }
 #endif
 

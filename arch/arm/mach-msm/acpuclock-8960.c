@@ -49,7 +49,13 @@ static struct scalable scalable[] __initdata = {
 		.vreg[VREG_CORE] = { "krait0", 1300000 },
 		.vreg[VREG_MEM]  = { "krait0_mem", 1150000 },
 		.vreg[VREG_DIG]  = { "krait0_dig", 1150000 },
+#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE : Change RTR8600 max voltage to improve GSM PPRE
+		 * 2012-09-04, bongkyu.kim@lge.com */
+		.vreg[VREG_HFPLL_A] = { "krait0_s8", 2100000 },
+#else
 		.vreg[VREG_HFPLL_A] = { "krait0_s8", 2050000 },
+#endif
 		.vreg[VREG_HFPLL_B] = { "krait0_l23", 1800000 },
 	},
 	[CPU1] = {
@@ -61,7 +67,13 @@ static struct scalable scalable[] __initdata = {
 		.vreg[VREG_CORE] = { "krait1", 1300000 },
 		.vreg[VREG_MEM]  = { "krait1_mem", 1150000 },
 		.vreg[VREG_DIG]  = { "krait1_dig", 1150000 },
+#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE : Change RTR8600 max voltage to improve GSM PPRE
+		 * 2012-09-04, bongkyu.kim@lge.com */
+		.vreg[VREG_HFPLL_A] = { "krait1_s8", 2100000 },
+#else
 		.vreg[VREG_HFPLL_A] = { "krait1_s8", 2050000 },
+#endif
 		.vreg[VREG_HFPLL_B] = { "krait1_l23", 1800000 },
 	},
 	[L2] = {
@@ -70,7 +82,13 @@ static struct scalable scalable[] __initdata = {
 		.aux_clk_sel = 3,
 		.sec_clk_sel = 2,
 		.l2cpmr_iaddr = 0x0500,
+#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE : Change RTR8600 max voltage to improve GSM PPRE
+		 * 2012-09-04, bongkyu.kim@lge.com */
+		.vreg[VREG_HFPLL_A] = { "l2_s8", 2100000 },
+#else
 		.vreg[VREG_HFPLL_A] = { "l2_s8", 2050000 },
+#endif
 		.vreg[VREG_HFPLL_B] = { "l2_l23", 1800000 },
 	},
 };
@@ -194,23 +212,87 @@ static struct acpu_level acpu_freq_tbl_fast[] __initdata = {
 	{ 1, {  1512000, HFPLL, 1, 0x38 }, L2(18), 1150000, AVS(0x400012) },
 	{ 0, { 0 } }
 };
-
-static struct pvs_table pvs_tables[NUM_SPEED_BINS][NUM_PVS] __initdata = {
-[0][PVS_SLOW]    = { acpu_freq_tbl_slow, sizeof(acpu_freq_tbl_slow),     0 },
-[0][PVS_NOMINAL] = { acpu_freq_tbl_nom,  sizeof(acpu_freq_tbl_nom),  25000 },
-[0][PVS_FAST]    = { acpu_freq_tbl_fast, sizeof(acpu_freq_tbl_fast), 25000 },
+#ifdef CONFIG_MACH_LGE
+/* LGE_CHANGE support factory process without battery, taehung.kim@lge.com
+ * if boot mode is factory then max frequency of cpu(0,1) is 1.2G
+ */
+static struct acpu_level acpu_freq_tbl_slow_lge_factory[] __initdata = {
+	{ 1, {   384000, PLL_8, 0, 0x00 }, L2(1),   950000, AVS(0x40001F) },
+	{ 0, {   432000, HFPLL, 2, 0x20 }, L2(7),   975000 },
+	{ 1, {   486000, HFPLL, 2, 0x24 }, L2(7),   975000 },
+	{ 0, {   540000, HFPLL, 2, 0x28 }, L2(7),  1000000 },
+	{ 1, {   594000, HFPLL, 1, 0x16 }, L2(7),  1000000 },
+	{ 0, {   648000, HFPLL, 1, 0x18 }, L2(7),  1025000 },
+	{ 1, {   702000, HFPLL, 1, 0x1A }, L2(7),  1025000 },
+	{ 0, {   756000, HFPLL, 1, 0x1C }, L2(7),  1075000 },
+	{ 1, {   810000, HFPLL, 1, 0x1E }, L2(7),  1075000 },
+	{ 0, {   864000, HFPLL, 1, 0x20 }, L2(7),  1100000 },
+	{ 1, {   918000, HFPLL, 1, 0x22 }, L2(7),  1100000 },
+	{ 0, {   972000, HFPLL, 1, 0x24 }, L2(7),  1125000 },
+	{ 1, {  1026000, HFPLL, 1, 0x26 }, L2(7),  1125000 },
+	{ 0, { 0 } }
 };
+
+static struct acpu_level acpu_freq_tbl_nom_lge_factory[] __initdata = {
+	{ 1, {   384000, PLL_8, 0, 0x00 }, L2(1),   900000, AVS(0x40007F) },
+	{ 0, {   432000, HFPLL, 2, 0x20 }, L2(7),   925000 },
+	{ 1, {   486000, HFPLL, 2, 0x24 }, L2(7),   925000 },
+	{ 0, {   540000, HFPLL, 2, 0x28 }, L2(7),   950000 },
+	{ 1, {   594000, HFPLL, 1, 0x16 }, L2(7),   950000 },
+	{ 0, {   648000, HFPLL, 1, 0x18 }, L2(7),   975000 },
+	{ 1, {   702000, HFPLL, 1, 0x1A }, L2(7),   975000 },
+	{ 0, {   756000, HFPLL, 1, 0x1C }, L2(7),  1025000 },
+	{ 1, {   810000, HFPLL, 1, 0x1E }, L2(7),  1025000 },
+	{ 0, {   864000, HFPLL, 1, 0x20 }, L2(7),  1050000 },
+	{ 1, {   918000, HFPLL, 1, 0x22 }, L2(7),  1050000 },
+	{ 0, {   972000, HFPLL, 1, 0x24 }, L2(7),  1075000 },
+	{ 1, {  1026000, HFPLL, 1, 0x26 }, L2(7),  1075000 },
+	{ 0, { 0 } }
+};
+
+static struct acpu_level acpu_freq_tbl_fast_lge_factory[] __initdata = {
+	{ 1, {   384000, PLL_8, 0, 0x00 }, L2(1),   850000, AVS(0x4000FF) },
+	{ 0, {   432000, HFPLL, 2, 0x20 }, L2(7),   875000 },
+	{ 1, {   486000, HFPLL, 2, 0x24 }, L2(7),   875000 },
+	{ 0, {   540000, HFPLL, 2, 0x28 }, L2(7),   900000 },
+	{ 1, {   594000, HFPLL, 1, 0x16 }, L2(7),   900000 },
+	{ 0, {   648000, HFPLL, 1, 0x18 }, L2(7),   925000 },
+	{ 1, {   702000, HFPLL, 1, 0x1A }, L2(7),   925000 },
+	{ 0, {   756000, HFPLL, 1, 0x1C }, L2(7),   975000 },
+	{ 1, {   810000, HFPLL, 1, 0x1E }, L2(7),   975000 },
+	{ 0, {   864000, HFPLL, 1, 0x20 }, L2(7),  1000000 },
+	{ 1, {   918000, HFPLL, 1, 0x22 }, L2(7),  1000000 },
+	{ 0, {   972000, HFPLL, 1, 0x24 }, L2(7),  1025000 },
+	{ 1, {  1026000, HFPLL, 1, 0x26 }, L2(7),  1025000 },
+	{ 0, { 0 } }
+};
+#endif
+static struct pvs_table pvs_tables[NUM_PVS] __initdata = {
+[PVS_SLOW]    = { acpu_freq_tbl_slow, sizeof(acpu_freq_tbl_slow),     0 },
+[PVS_NOMINAL] = { acpu_freq_tbl_nom,  sizeof(acpu_freq_tbl_nom),  25000 },
+[PVS_FAST]    = { acpu_freq_tbl_fast, sizeof(acpu_freq_tbl_fast), 25000 },
+};
+#ifdef CONFIG_MACH_LGE
+static struct pvs_table pvs_tables_lge_factory[NUM_PVS] __initdata = {
+[PVS_SLOW]    = { acpu_freq_tbl_slow_lge_factory, sizeof(acpu_freq_tbl_slow_lge_factory),     0 },
+[PVS_NOMINAL] = { acpu_freq_tbl_nom_lge_factory,  sizeof(acpu_freq_tbl_nom_lge_factory),  25000 },
+[PVS_FAST]    = { acpu_freq_tbl_fast_lge_factory, sizeof(acpu_freq_tbl_fast_lge_factory), 25000 },
+};
+#endif
 
 static struct acpuclk_krait_params acpuclk_8960_params __initdata = {
 	.scalable = scalable,
 	.scalable_size = sizeof(scalable),
 	.hfpll_data = &hfpll_data,
-	.pvs_tables = pvs_tables,
+	.pvs_tables = &pvs_tables,
 	.l2_freq_tbl = l2_freq_tbl,
 	.l2_freq_tbl_size = sizeof(l2_freq_tbl),
 	.bus_scale = &bus_scale_data,
 	.pte_efuse_phys = 0x007000C0,
 	.stby_khz = 384000,
+#ifdef CONFIG_MACH_LGE
+	.pvs_tables_lge_factory = &pvs_tables_lge_factory,
+#endif
 };
 
 static int __init acpuclk_8960_probe(struct platform_device *pdev)

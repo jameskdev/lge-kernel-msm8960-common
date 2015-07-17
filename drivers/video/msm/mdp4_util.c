@@ -391,6 +391,14 @@ void mdp4_hw_init(void)
 	ulong bits;
 	uint32 clk_rate;
 	int i;
+#ifdef CONFIG_MACH_LGE
+	/* LGE_CHANGE
+	 * To fix disable booting logo in kernel booting in D1LV
+	 * MDP off before on
+	 * 2011-11-08, baryun.hwang@lge.com
+	 */
+	MDP_OUTP(MDP_BASE + 0xE0000, 0);
+#endif
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	mdp_clk_ctrl(1);
@@ -501,6 +509,17 @@ void mdp4_clear_lcdc(void)
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
+#ifdef CONFIG_LGE_LCD_UNDERRUN
+struct work_struct underrun_work;
+extern void get_msm_bus_info(struct work_struct *);
+
+void init_underrun_log(void)
+{
+	INIT_WORK(&underrun_work, get_msm_bus_info);
+}
+
+#endif
+
 irqreturn_t mdp4_isr(int irq, void *ptr)
 {
 	uint32 isr, mask, panel;
@@ -526,6 +545,9 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 	if (isr & INTR_PRIMARY_INTF_UDERRUN) {
 		pr_debug("%s: UNDERRUN -- primary\n", __func__);
 		mdp4_stat.intr_underrun_p++;
+#ifdef CONFIG_LGE_LCD_UNDERRUN
+		schedule_work(&underrun_work);
+#endif
 		/* When underun occurs mdp clear the histogram registers
 		that are set before in hw_init so restore them back so
 		that histogram works.*/
@@ -1390,6 +1412,47 @@ struct mdp_csc_cfg mdp_csc_convert[4] = {
 		{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
 	},
 };
+#if defined(CONFIG_LGE_BROADCAST_TDMB)
+struct mdp_csc_cfg dmb_csc_convert = {
+#if defined(CONFIG_MACH_MSM8960_FX1SK)
+	/* FX1SK(F260) YUV2RGB R = 280, G = 294, B = 310 */
+	0,
+	{
+		0x0230, 0x0000, 0x0331,
+		0x024c, 0xff37, 0xfe60,
+		0x026c, 0x0409, 0x0000,
+	},
+	{ 0xfff0, 0xff80, 0xff80, },
+	{ 0x0, 0x0, 0x0, },
+	{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
+	{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
+#elif defined(CONFIG_MACH_MSM8960_VU2)
+	/* VU2(F200) YUV2RGB R = 255, G = 280, B = 310 */
+	0,
+	{
+		0x01fe, 0x0000, 0x0331,
+		0x0230, 0xff37, 0xfe60,
+		0x026c, 0x0409, 0x0000,
+	},
+	{ 0xfff0, 0xff80, 0xff80, },
+	{ 0x0, 0x0, 0x0, },
+	{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
+	{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
+#else
+	/* default YUV2RGB*/
+	0,
+	{
+		0x0254, 0x0000, 0x0331,
+		0x0254, 0xff37, 0xfe60,
+		0x0254, 0x0409, 0x0000,
+	},
+	{ 0xfff0, 0xff80, 0xff80, },
+	{ 0x0, 0x0, 0x0, },
+	{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
+	{ 0x0, 0xff, 0x0, 0xff, 0x0, 0xff, },
+#endif
+};
+#endif /* LGE_BROADCAST_TDMB */
 
 void mdp4_vg_csc_restore(void)
 {

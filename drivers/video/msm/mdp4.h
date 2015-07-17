@@ -33,7 +33,6 @@ extern u32 mdp_max_clk;
 extern u64 mdp_max_bw;
 extern u32 mdp_bw_ab_factor;
 extern u32 mdp_bw_ib_factor;
-extern u32 mdp_iommu_max_map_size;
 #define MDP4_BW_AB_DEFAULT_FACTOR (115)	/* 1.15 */
 #define MDP4_BW_IB_DEFAULT_FACTOR (150)	/* 1.5 */
 #define MDP_BUS_SCALE_AB_STEP (0x4000000)
@@ -53,6 +52,19 @@ extern u32 mdp_iommu_max_map_size;
 #define CS_CONTROLLER_0 0x0707ffff
 #define CS_CONTROLLER_1 0x03073f3f
 
+#if defined (CONFIG_MACH_MSM8960_FX1SU) || defined (CONFIG_MACH_MSM8960_FX1S)
+#define CSC_RESTORE
+#define CMAP_RESTORE
+#endif
+
+#ifdef CMAP_RESTORE
+extern unsigned char cmap_lut_changed;
+#endif
+
+#ifdef CSC_RESTORE
+extern bool csc_dmap_changed;
+extern struct mdp_csc_cfg_data csc_cfg_backup_matrix;
+#endif
 typedef int (*cmd_fxn_t)(struct platform_device *pdev);
 
 enum {		/* display */
@@ -382,6 +394,12 @@ struct mdp4_overlay_pipe {
 	struct completion comp;
 	struct completion dmas_comp;
 	struct mdp4_iommu_pipe_info iommu;
+
+#if defined(CONFIG_FB_MSM_MIPI_LGIT_CMD_WVGA_INVERSE_PT_PANEL) || \
+		defined(CONFIG_FB_MSM_MIPI_LGIT_VIDEO_WVGA_INVERSE_PT_PANEL)
+	uint32 ext_flag;
+	struct msm_fb_data_type *mfd;
+#endif
 };
 
 struct mdp4_statistic {
@@ -794,6 +812,9 @@ void mdp4_dsi_cmd_dma_busy_check(void);
 
 
 #ifdef CONFIG_FB_MSM_MIPI_DSI
+#ifdef CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT
+void mdp4_overlay_dsi_video_start(void);
+#endif
 int mdp4_dsi_cmd_on(struct platform_device *pdev);
 int mdp4_dsi_cmd_off(struct platform_device *pdev);
 int mdp4_dsi_video_off(struct platform_device *pdev);

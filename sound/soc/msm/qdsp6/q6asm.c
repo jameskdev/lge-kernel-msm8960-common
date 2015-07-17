@@ -41,6 +41,9 @@
 #include <sound/apr_audio.h>
 #include <sound/q6asm.h>
 
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+#include <mach/amas_hdmi.h>
+#endif
 
 #define TRUE        0x01
 #define FALSE       0x00
@@ -901,6 +904,10 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 		case ASM_SESSION_CMD_RUN:
 		case ASM_SESSION_CMD_REGISTER_FOR_TX_OVERFLOW_EVENTS:
 		case ASM_STREAM_CMD_FLUSH_READBUFS:
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+		case ASM_SESSION_CMD_CONNECT_AFE_PORT:
+		case ASM_DATA_CMD_IEC_60958_FRAME_RATE:
+#endif
 		pr_debug("%s:Payload = [0x%x]\n", __func__, payload[0]);
 		if (token != ac->session) {
 			pr_err("%s:Invalid session[%d] rxed expected[%d]",
@@ -1497,9 +1504,13 @@ int q6asm_open_write_compressed(struct audio_client *ac, uint32_t format)
 		pr_err("%s: Invalid format[%d]\n", __func__, format);
 		goto fail_cmd;
 	}
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+	open.flags = 0x00000001;
+#else
 	/*Below flag indicates the DSP that Compressed audio input
 	stream is not IEC 61937 or IEC 60958 packetizied*/
 	open.flags = 0x00000000;
+#endif
 	rc = apr_send_pkt(ac->apr, (uint32_t *) &open);
 	if (rc < 0) {
 		pr_err("%s: open failed op[0x%x]rc[%d]\n", \
@@ -1522,6 +1533,7 @@ int q6asm_open_write(struct audio_client *ac, uint32_t format)
 {
 	int rc = 0x00;
 	struct asm_stream_cmd_open_write open;
+       static int  if_first_open_write = 1;
 
 	if ((ac == NULL) || (ac->apr == NULL)) {
 		pr_err("%s: APR handle NULL\n", __func__);
@@ -1530,6 +1542,11 @@ int q6asm_open_write(struct audio_client *ac, uint32_t format)
 	pr_debug("%s: session[%d] wr_format[0x%x]", __func__, ac->session,
 		format);
 
+	//make sure Q6 is ready before sending the STREAM_CMD_OPEN_WRITE
+	if(if_first_open_write == 1) {
+		msleep(30);
+		if_first_open_write = 0;
+	}
 	q6asm_add_hdr(ac, &open.hdr, sizeof(open), TRUE);
 
 	if (ac->perf_mode) {
@@ -3737,6 +3754,139 @@ fail_cmd:
 	return -EINVAL;
 }
 
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+int q6asm_iec_60958_frame_rate_write(struct audio_client *ac, uint32_t sample_rate)
+{
+	struct asm_stream_cmd_iec_60958_frame_rate_write write;
+	int rc;
+	atomic_t *state;
+
+	pr_debug("%s: session[%d]", __func__, ac->session);
+
+	if (!ac || ac->apr == NULL) {
+		pr_err("APR handle NULL\n");
+		return -EINVAL;
+	}
+
+	q6asm_add_hdr(ac, &write.hdr, sizeof(write), TRUE);
+
+	write.hdr.opcode = ASM_DATA_CMD_IEC_60958_FRAME_RATE;
+	write.framerate = sample_rate;
+	state = &ac->cmd_state;
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &write);
+	if (rc < 0) {
+		pr_err("write op[0x%x]rc[%d]\n", write.hdr.opcode, rc);
+		goto fail_cmd;
+	}
+	rc = wait_event_timeout(ac->cmd_wait, (atomic_read(state) == 0), 5*HZ);
+	if (!rc) {
+		pr_err("timeout. waited for response opcode[0x%x]\n",
+							write.hdr.opcode);
+		goto fail_cmd;
+	}
+
+	return 0;
+fail_cmd:
+	return -EINVAL;
+}
+
+int q6asm_iec_60958_frame_rate_write_nowait(struct audio_client *ac, uint32_t sample_rate)
+{
+	struct asm_stream_cmd_iec_60958_frame_rate_write write;
+	int rc;
+
+	pr_debug("%s: session[%d]", __func__, ac->session);
+
+	if (!ac || ac->apr == NULL) {
+		pr_err("APR handle NULL\n");
+		return -EINVAL;
+	}
+
+	q6asm_add_hdr(ac, &write.hdr, sizeof(write), TRUE);
+
+	write.hdr.opcode = ASM_DATA_CMD_IEC_60958_FRAME_RATE;
+	write.framerate = sample_rate;
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &write);
+	if (rc < 0) {
+		pr_err("write op[0x%x]rc[%d]\n", write.hdr.opcode, rc);
+		goto fail_cmd;
+	}
+
+	return 0;
+fail_cmd:
+	return -EINVAL;
+}
+
+// for HDMI - compressed multichannel mode only
+int q6asm_session_cmd_connect_afe_port(struct audio_client *ac)
+{
+	struct asm_session_cmd_connect_afe_port write;
+	int rc;
+	atomic_t *state;
+
+	pr_debug("%s: session[%d]", __func__, ac->session);
+
+	if (!ac || ac->apr == NULL) {
+		pr_err("APR handle NULL\n");
+		return -EINVAL;
+	}
+
+	q6asm_add_hdr(ac, &write.hdr, sizeof(write), TRUE);
+
+	write.hdr.opcode = ASM_SESSION_CMD_CONNECT_AFE_PORT;
+	write.port_id = HDMI_RX;
+	write.reserved = 0x0;
+	state = &ac->cmd_state;
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &write);
+	if (rc < 0) {
+		pr_err("write op[0x%x]rc[%d]\n", write.hdr.opcode, rc);
+		goto fail_cmd;
+	}
+	rc = wait_event_timeout(ac->cmd_wait, (atomic_read(state) == 0), 5*HZ);
+	if (!rc) {
+		pr_err("timeout. waited for response opcode[0x%x]\n",
+							write.hdr.opcode);
+		goto fail_cmd;
+	}
+
+	return 0;
+fail_cmd:
+	return -EINVAL;
+}
+
+int q6asm_session_cmd_connect_afe_port_nowait(struct audio_client *ac)
+{
+	struct asm_session_cmd_connect_afe_port write;
+	int rc;
+
+	pr_debug("%s: session[%d]", __func__, ac->session);
+
+	if (!ac || ac->apr == NULL) {
+		pr_err("APR handle NULL\n");
+		return -EINVAL;
+	}
+
+	q6asm_add_hdr(ac, &write.hdr, sizeof(write), TRUE);
+
+	write.hdr.opcode = ASM_SESSION_CMD_CONNECT_AFE_PORT;
+	write.port_id = HDMI_RX;
+	write.reserved = 0x0;
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &write);
+	if (rc < 0) {
+		pr_err("write op[0x%x]rc[%d]\n", write.hdr.opcode, rc);
+		goto fail_cmd;
+	}
+
+	return 0;
+fail_cmd:
+	return -EINVAL;
+}
+#endif
+
 int q6asm_write_nolock(struct audio_client *ac, uint32_t len, uint32_t msw_ts,
 			uint32_t lsw_ts, uint32_t flags)
 {
@@ -4033,15 +4183,35 @@ static int __init q6asm_init(void)
 	memset(session, 0, sizeof(session));
 #ifdef CONFIG_DEBUG_FS
 	out_buffer = kmalloc(OUT_BUFFER_SIZE, GFP_KERNEL);
+#ifdef CONFIG_LGE_AUDIO
+	/*
+	 * permission is changed S_IWUGO => S_IWUSR | S_IWGRP for CTS
+	 * bob.cho@lge.com, 02/07/2012
+	 */
+	out_dentry = debugfs_create_file("audio_out_latency_measurement_node",\
+				S_IFREG | S_IRUGO | S_IWUSR | S_IWGRP,\
+				NULL, NULL, &audio_output_latency_debug_fops);
+#else
 	out_dentry = debugfs_create_file("audio_out_latency_measurement_node",\
 				0664,\
 				NULL, NULL, &audio_output_latency_debug_fops);
+#endif
 	if (IS_ERR(out_dentry))
 		pr_err("debugfs_create_file failed\n");
 	in_buffer = kmalloc(IN_BUFFER_SIZE, GFP_KERNEL);
+#ifdef CONFIG_LGE_AUDIO
+	/*
+	 * permission is changed S_IWUGO => S_IWUSR | S_IWGRP for CTS
+	 * bob.cho@lge.com, 02/07/2012
+	 */
+	in_dentry = debugfs_create_file("audio_in_latency_measurement_node",\
+				S_IFREG | S_IRUGO | S_IWUSR | S_IWGRP,\
+				NULL, NULL, &audio_input_latency_debug_fops);
+#else
 	in_dentry = debugfs_create_file("audio_in_latency_measurement_node",\
 				0664,\
 				NULL, NULL, &audio_input_latency_debug_fops);
+#endif
 	if (IS_ERR(in_dentry))
 		pr_err("debugfs_create_file failed\n");
 #endif

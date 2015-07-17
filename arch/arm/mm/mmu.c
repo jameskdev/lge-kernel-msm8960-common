@@ -307,8 +307,7 @@ static struct mem_type mem_types[] = {
 		.domain    = DOMAIN_KERNEL,
 	},
 	[MT_MEMORY_DMA_READY] = {
-		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY |
-				L_PTE_XN,
+		.prot_pte  = L_PTE_PRESENT | L_PTE_YOUNG | L_PTE_DIRTY,
 		.prot_l1   = PMD_TYPE_TABLE,
 		.domain    = DOMAIN_KERNEL,
 	},
@@ -849,7 +848,7 @@ static void __init pmd_empty_section_gap(unsigned long addr)
 	vm = early_alloc_aligned(sizeof(*vm), __alignof__(*vm));
 	vm->addr = (void *)addr;
 	vm->size = SECTION_SIZE;
-	vm->flags = VM_IOREMAP | VM_ARM_STATIC_MAPPING;
+	vm->flags = VM_IOREMAP | VM_ARM_EMPTY_MAPPING;
 	vm->caller = pmd_empty_section_gap;
 	vm_area_add_early(vm);
 }
@@ -862,7 +861,7 @@ static void __init fill_pmd_gaps(void)
 
 	/* we're still single threaded hence no lock needed here */
 	for (vm = vmlist; vm; vm = vm->next) {
-		if (!(vm->flags & VM_ARM_STATIC_MAPPING))
+		if (!(vm->flags & (VM_ARM_STATIC_MAPPING | VM_ARM_EMPTY_MAPPING)))
 			continue;
 		addr = (unsigned long)vm->addr;
 		if (addr < next)
@@ -899,9 +898,14 @@ static void __init fill_pmd_gaps(void)
 #else
 #define fill_pmd_gaps() do { } while (0)
 #endif
+#ifdef CONFIG_LGE_VMALLOC_TOTAL_SIZE
+static void * __initdata vmalloc_min =
+	(void *)(VMALLOC_END - (CONFIG_LGE_VMALLOC_TOTAL_SIZE << 20) - VMALLOC_OFFSET);
 
+#else
 static void * __initdata vmalloc_min =
 	(void *)(VMALLOC_END - (240 << 20) - VMALLOC_OFFSET);
+#endif
 
 /*
  * vmalloc=size forces the vmalloc area to be exactly 'size'
@@ -1329,6 +1333,8 @@ void mem_text_write_kernel_word(unsigned long *addr, unsigned long word)
 }
 EXPORT_SYMBOL(mem_text_write_kernel_word);
 
+extern char __init_data[];
+
 static void __init map_lowmem(void)
 {
 	struct memblock_region *reg;
@@ -1349,7 +1355,7 @@ static void __init map_lowmem(void)
 #ifdef CONFIG_STRICT_MEMORY_RWX
 		if (start <= __pa(_text) && __pa(_text) < end) {
 			map.length = SECTION_SIZE;
-			map.type = MT_MEMORY_RW;
+			map.type = MT_MEMORY;
 
 			create_mapping(&map);
 
@@ -1369,15 +1375,14 @@ static void __init map_lowmem(void)
 
 			map.pfn = __phys_to_pfn(__pa(__init_begin));
 			map.virtual = (unsigned long)__init_begin;
-			map.length = (char *)__arch_info_begin - __init_begin;
-			map.type = MT_MEMORY_RX;
+			map.length = __init_data - __init_begin;
+			map.type = MT_MEMORY;
 
 			create_mapping(&map);
 
-			map.pfn = __phys_to_pfn(__pa(__arch_info_begin));
-			map.virtual = (unsigned long)__arch_info_begin;
-			map.length = __phys_to_virt(end) -
-				(unsigned long)__arch_info_begin;
+			map.pfn = __phys_to_pfn(__pa(__init_data));
+			map.virtual = (unsigned long)__init_data;
+			map.length = __phys_to_virt(end) - (unsigned int)__init_data;
 			map.type = MT_MEMORY_RW;
 		} else {
 			map.length = end - start;

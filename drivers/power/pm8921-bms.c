@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  *
  */
-
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -31,7 +30,17 @@
 #include <linux/delay.h>
 #include <linux/mutex.h>
 #include <linux/rtc.h>
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+#include "../../arch/arm/mach-msm/include/mach/msm_smsm.h"
+#endif
 
+#ifdef CONFIG_LGE_PM
+#include <mach/board_lge.h>
+
+#define I_MAX 30 /*numner of SOC averaging unit*/
+#define BMS_SOC_INFORM_TIME 20000 /*SOC INFOMATION Logging time*/
+
+#endif
 #define BMS_CONTROL		0x224
 #define BMS_S1_DELAY		0x225
 #define BMS_OUTPUT0		0x230
@@ -60,6 +69,15 @@
 #define WD_BIT			BIT(7)
 
 #define BATT_ALARM_ACCURACY	50	/* 50mV */
+
+/* L0/L1A, bms_soc_logging
+ * Workaround for BMS error Debugging
+ * 2012-03-30, hyemin.cho@lge.com
+ */
+#ifdef CONFIG_LGE_PM
+extern void pm8921_charger_force_update_batt_psy(void);
+#endif
+
 
 enum pmic_bms_interrupts {
 	PM8921_BMS_SBI_WRITE_OK,
@@ -114,6 +132,10 @@ struct pm8921_bms_chip {
 	unsigned long		last_calib_time;
 	int			last_calib_temp;
 	struct mutex		calib_mutex;
+#ifdef CONFIG_LGE_PM
+	struct delayed_work     bms_soc_work;/*2012-03-30 bms_soc_logging hyemin.cho@lge.com*/
+#endif
+	
 	unsigned int		revision;
 	unsigned int		xoadc_v0625_usb_present;
 	unsigned int		xoadc_v0625_usb_absent;
@@ -197,6 +219,17 @@ struct pm8921_bms_chip {
 	bool			first_report_after_suspend;
 	bool			soc_updated_on_resume;
 	int			last_soc_at_suspend;
+
+/* LGE_UPDATE_S [dongwon.choi@lge.com] 2013-01-10 */
+#ifdef CONFIG_LGE_PM
+	int                     first_fixed_iavg_ma;
+	int             shutdown_soc_threshold;
+#ifdef CONFIG_MACH_MSM8960_FX1SK		
+	unsigned long		adj_sec;
+#endif
+#endif /* CONFIG_LGE_PM */
+/* LGE_UPDATE_E */
+
 };
 
 /*
@@ -233,13 +266,22 @@ static int last_soc = -EINVAL;
 static int last_real_fcc_mah = -EINVAL;
 static int last_real_fcc_batt_temp = -EINVAL;
 static int battery_removed;
-
+#ifndef CONFIG_LGE_PM
 static int pm8921_battery_gauge_alarm_notify(struct notifier_block *nb,
 				unsigned long status, void *unused);
 
 static struct notifier_block alarm_notifier = {
 	.notifier_call = pm8921_battery_gauge_alarm_notify,
 };
+#endif 
+#ifdef CONFIG_LGE_PM
+static int last_reported_SOC = -EINVAL;/*2012-07-22 hyemin.cho@lge.com */
+static int cntSOC = 0;
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+static int bEOC_NOT_100 = 0;
+#endif
+#endif
+
 
 static int bms_ro_ops_set(const char *val, const struct kernel_param *kp)
 {
@@ -415,6 +457,25 @@ static int pm_bms_masked_write(struct pm8921_bms_chip *chip, u16 addr,
 	return 0;
 }
 
+#ifdef CONFIG_LGE_PM
+static int usb_chg_plugged_in(void)
+{
+	union power_supply_propval ret = {0,};
+	static struct power_supply *psy;
+
+	if (psy == NULL) {
+		psy = power_supply_get_by_name("usb");
+	if (psy == NULL)
+		return 0;
+	}
+
+	if (psy->get_property(psy, POWER_SUPPLY_PROP_ONLINE, &ret))
+		return 0;
+
+	return ret.intval;
+}
+#else
+
 static int usb_chg_plugged_in(struct pm8921_bms_chip *chip)
 {
 	int val = pm8921_is_usb_chg_plugged_in();
@@ -430,6 +491,9 @@ static int usb_chg_plugged_in(struct pm8921_bms_chip *chip)
 
 	return val;
 }
+#endif
+
+#ifndef CONFIG_LGE_PM
 
 static void pm8921_bms_low_voltage_config(struct pm8921_bms_chip *chip,
 								int time_ms)
@@ -444,7 +508,6 @@ static void pm8921_bms_low_voltage_config(struct pm8921_bms_chip *chip,
 	schedule_delayed_work(&chip->calculate_soc_delayed_work,
 						msecs_to_jiffies(ms));
 }
-
 static int pm8921_bms_enable_batt_alarm(struct pm8921_bms_chip *chip)
 {
 	int rc = 0;
@@ -539,9 +602,9 @@ static int pm8921_battery_gauge_alarm_notify(struct notifier_block *nb,
 			pm8921_bms_low_voltage_config(the_chip,
 					the_chip->low_voltage_calc_ms);
 		}
-
 		rc = pm8xxx_batt_alarm_disable(
 				PM8XXX_BATT_ALARM_LOWER_COMPARATOR);
+	
 		if (!rc)
 			rc = pm8xxx_batt_alarm_enable(
 				PM8XXX_BATT_ALARM_UPPER_COMPARATOR);
@@ -554,8 +617,10 @@ static int pm8921_battery_gauge_alarm_notify(struct notifier_block *nb,
 		if (!rc)
 			rc = pm8xxx_batt_alarm_enable(
 				PM8XXX_BATT_ALARM_LOWER_COMPARATOR);
+
 		if (rc)
 			pr_err("unable to set alarm state rc=%d\n", rc);
+
 
 		break;
 	default:
@@ -565,7 +630,36 @@ static int pm8921_battery_gauge_alarm_notify(struct notifier_block *nb,
 
 	return 0;
 };
+#endif 
 
+#ifdef CONFIG_LGE_PM
+static int dc_chg_plugged_in(void)
+{
+	union power_supply_propval ret = {0,};
+	static struct power_supply *psy;
+
+	if (psy == NULL) {
+		    psy = power_supply_get_by_name("ac");
+		    if (psy == NULL)
+		            return 0;
+	}
+
+	if (psy->get_property(psy, POWER_SUPPLY_PROP_ONLINE, &ret))
+		    return 0;
+
+	return ret.intval;
+}
+
+static int chg_plugged_in(void)
+{
+	int rc = 0;
+
+	if (usb_chg_plugged_in() || dc_chg_plugged_in())
+		    rc = 1;
+
+	return rc;
+}
+#endif
 
 #define HOLD_OREG_DATA		BIT(1)
 static int pm_bms_lock_output_data(struct pm8921_bms_chip *chip)
@@ -836,7 +930,12 @@ int override_mode_simultaneous_battery_voltage_and_current(int *ibat_ua,
 	mutex_unlock(&the_chip->bms_output_lock);
 
 	get_batt_temp(the_chip, &batt_temp);
+
+#ifdef CONFIG_LGE_PM
+	usb_chg = chg_plugged_in();
+#else /* QCT original */
 	usb_chg = usb_chg_plugged_in(the_chip);
+#endif
 
 	convert_vbatt_raw_to_uv(the_chip, usb_chg, vbat_raw, vbat_uv);
 	convert_vsense_to_uv(the_chip, vsense_raw, &vsense_uv);
@@ -932,6 +1031,9 @@ static bool is_warm_restart(struct pm8921_bms_chip *chip)
 		pr_err("err reading pon 6 rc = %d\n", rc);
 		return false;
 	}
+
+	pr_info("return :%d ",(int)(reg & WD_BIT) );
+	
 	return reg & WD_BIT;
 }
 
@@ -1047,7 +1149,11 @@ static int read_soc_params_raw(struct pm8921_bms_chip *chip,
 	pm_bms_unlock_output_data(chip);
 	mutex_unlock(&chip->bms_output_lock);
 
+#ifdef CONFIG_LGE_PM
+	usb_chg = chg_plugged_in();
+#else /* QCT original */
 	usb_chg =  usb_chg_plugged_in(chip);
+#endif
 
 	if (chip->prev_last_good_ocv_raw == OCV_RAW_UNINITIALIZED) {
 		chip->prev_last_good_ocv_raw = raw->last_good_ocv_raw;
@@ -1058,6 +1164,17 @@ static int read_soc_params_raw(struct pm8921_bms_chip *chip,
 		raw->last_good_ocv_uv = ocv_ir_compensation(chip,
 						raw->last_good_ocv_uv);
 		chip->last_ocv_uv = raw->last_good_ocv_uv;
+		/* LGE_UPDATE_S [dongwon.choi@lge.com] 2013-01-10
+		 * for ignoring shutdown soc when warm booting or
+		 * shutdown soc is lower than threshold
+		 * This patch is from Mako */
+#ifdef CONFIG_LGE_PM
+		if (is_warm_restart(chip) ||
+				chip->shutdown_soc < chip->shutdown_soc_threshold) {
+			shutdown_soc_invalid = 1;
+			pr_debug("discard shutdown soc! cc_raw = 0x%x\n", raw->cc);
+		}
+#endif 
 
 		if (is_warm_restart(chip)
 			|| raw->cc > CC_RAW_5MAH
@@ -1085,6 +1202,9 @@ static int read_soc_params_raw(struct pm8921_bms_chip *chip,
 				raw->cc = 0;
 			}
 		}
+
+		/* LGE_UPDATE_E */
+		
 		chip->last_ocv_temp_decidegc = batt_temp_decidegc;
 		pr_debug("PON_OCV_UV = %d\n", chip->last_ocv_uv);
 	} else if (chip->prev_last_good_ocv_raw != raw->last_good_ocv_raw) {
@@ -1732,6 +1852,43 @@ static void calc_current_max(struct pm8921_bms_chip *chip, int ocv_uv,
 	chip->imax_ua = 1000 * (ocv_uv - chip->v_cutoff * 1000) / rbatt_mohm;
 }
 
+/* L0/L1A, bms_soc_averaging
+ * BMS averaging function
+ * 2012-04-22, hyemin.cho@lge.com
+ */
+#ifdef CONFIG_LGE_PM
+#ifdef CONFIG_MACH_MSM8960_FX1SK	
+int calculate_adj_delta_time(struct pm8921_bms_chip *chip)
+{
+	unsigned long now_adj_sec = 0;
+
+	/* default to delta time = 0 if anything fails */
+	int delta_time_s = 0;
+
+	get_current_time(&now_adj_sec);
+
+	delta_time_s =  (now_adj_sec - chip->adj_sec);
+	pr_info("adj_sec = %ld, now_adj_sec = %ld delta_s = %d\n",
+		chip->adj_sec, now_adj_sec, delta_time_s);
+
+	return delta_time_s;
+}
+#endif
+
+int cal_rnd_avg(int *soc_value)
+{
+	 int sum = 0;
+	 int avr = 0;
+	 int i;
+
+	 for (i = 0; i < I_MAX; i++)
+		sum += soc_value[i];
+	 avr = ((sum/I_MAX)*10+5)/10;
+
+	 return avr;
+}
+#endif
+
 static int bound_soc(int soc)
 {
 	soc = max(0, soc);
@@ -1814,6 +1971,23 @@ static int charging_adjustments(struct pm8921_bms_chip *chip,
 static void very_low_voltage_check(struct pm8921_bms_chip *chip,
 					int ibat_ua, int vbat_uv)
 {
+#ifdef CONFIG_LGE_PM
+	/*
+	 * if battery is very low (v_cutoff voltage + 20mv) hold
+	 * a wakelock untill soc = 0%
+	 */
+	if (vbat_uv <= (chip->alarm_low_mv + 20) * 1000) {
+		pr_debug("voltage = %d low holding wakelock\n", vbat_uv);
+		chip->soc_calc_period = chip->low_voltage_calc_ms;
+	}
+
+	if (vbat_uv > (chip->alarm_low_mv + 20 + BATT_ALARM_ACCURACY) * 1000 ) {
+		pr_debug("voltage = %d releasing wakelock\n", vbat_uv);
+		chip->vbatt_cutoff_count = 0;
+		chip->soc_calc_period = chip->normal_voltage_calc_ms;
+	}	
+#else	
+
 	int rc;
 	/*
 	 * if battery is very low (v_cutoff voltage + 20mv) hold
@@ -1836,6 +2010,7 @@ static void very_low_voltage_check(struct pm8921_bms_chip *chip,
 			pr_err("Unable to enable batt alarm\n");
 		wake_unlock(&chip->low_voltage_wake_lock);
 	}
+#endif	
 }
 
 static bool is_voltage_below_cutoff_window(struct pm8921_bms_chip *chip,
@@ -2014,7 +2189,7 @@ skip_limiting_corrections:
 	soc = soc_new;
 
 out:
-	pr_debug("ibat_ua = %d, vbat_uv = %d, ocv_est_uv = %d, pc_est = %d, "
+	pr_info("ibat_ua = %d, vbat_uv = %d, ocv_est_uv = %d, pc_est = %d, "
 		"soc_est = %d, n = %d, delta_ocv_uv = %d, last_ocv_uv = %d, "
 		"pc_new = %d, soc_new = %d, rbatt = %d, m = %d\n",
 		ibat_ua, vbat_uv, ocv_est_uv, pc_est,
@@ -2094,6 +2269,13 @@ static void read_shutdown_soc_and_iavg(struct pm8921_bms_chip *chip)
 		chip->shutdown_soc = 0;
 		chip->shutdown_iavg_ua = 0;
 	}
+		/* LGE_UPDATE_S [dongwon.choi@lge.com] 2013-01-10 */
+#ifdef CONFIG_LGE_PM
+		if (chip->first_fixed_iavg_ma && !chip->ignore_shutdown_soc) {
+			chip->shutdown_iavg_ua = chip->first_fixed_iavg_ma;
+		}
+#endif /* CONFIG_LGE_PM */
+		/* LGE_UPDATE_E */
 
 	pr_debug("shutdown_soc = %d shutdown_iavg = %d shutdown_soc_invalid = %d\n",
 			chip->shutdown_soc,
@@ -2121,7 +2303,11 @@ static int scale_soc_while_chg(struct pm8921_bms_chip *chip,
 	 */
 
 	/* if we are not charging return last soc */
-	if (the_chip->start_percent == -EINVAL)
+	if (the_chip->start_percent == -EINVAL
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+		&& (bEOC_NOT_100 != 1  || !chg_plugged_in())
+#endif		
+		)
 		return prev_soc;
 
 	/* do not scale at 100 */
@@ -2153,6 +2339,37 @@ static int scale_soc_while_chg(struct pm8921_bms_chip *chip,
 
 static bool is_shutdown_soc_within_limits(struct pm8921_bms_chip *chip, int soc)
 {
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+	unsigned int cable_info= 0;
+	unsigned int smem_size;
+	unsigned int *smem_ptr;
+
+	smem_ptr = (unsigned int *)smem_get_entry(SMEM_ID_VENDOR1, &smem_size);
+	if (smem_ptr != NULL) {
+		cable_info = *smem_ptr;
+	}
+	if (lge_get_charger_reset_state())
+	{
+		shutdown_soc_invalid = 0;
+		pr_info("lge_get_charger_reset_state , shutdown_soc_invalid = %d\n",
+				shutdown_soc_invalid);
+
+		return 1;
+	}
+	else if (cable_info == 8 && is_warm_restart(chip) )
+	{
+		shutdown_soc_invalid = 0;
+		pr_info("cable_info = %d, shutdown_soc_invalid = %d\n",
+			cable_info, shutdown_soc_invalid);
+		return 1;
+
+	}
+	else
+	{
+		shutdown_soc_invalid = 1;
+		return 0;
+	}	
+#endif
 	if (shutdown_soc_invalid) {
 		pr_debug("NOT forcing shutdown soc = %d\n", chip->shutdown_soc);
 		return 0;
@@ -2206,7 +2423,11 @@ static void calib_hkadc(struct pm8921_bms_chip *chip)
 	}
 	voltage = xoadc_reading_to_microvolt(result.adc_code);
 
+#ifdef CONFIG_LGE_PM
+	usb_chg = chg_plugged_in();
+#else /* QCT original */
 	usb_chg = usb_chg_plugged_in(chip);
+#endif
 	pr_debug("result 0.625V = 0x%x, voltage = %duV adc_meas = %lld usb_chg = %d\n",
 				result.adc_code, voltage, result.measurement,
 				usb_chg);
@@ -2232,6 +2453,70 @@ static void calib_hkadc(struct pm8921_bms_chip *chip)
 out:
 	mutex_unlock(&chip->calib_mutex);
 }
+
+/* L0/L1A, bms_soc_logging
+ * Workaround for BMS error Debugging
+ * 2012-03-30, hyemin.cho@lge.com
+ */
+#ifdef CONFIG_LGE_PM
+static int get_prop_batt_temp(struct pm8921_bms_chip *chip)
+{
+	int rc;
+	struct pm8xxx_adc_chan_result result;
+
+	rc = pm8xxx_adc_read(chip->batt_temp_channel, &result);
+	if (rc) {
+		   pr_err("error reading adc channel = %d, rc = %d\n",
+		                           chip->vbat_channel, rc);
+		   return rc;
+	}
+	pr_debug("batt_temp phy = %lld meas = 0x%llx\n", result.physical,
+		                                   result.measurement);
+	if (result.physical > 680)
+		   pr_err("BATT_TEMP= %d > 68degC, device will be shutdown\n",
+		                                           (int) result.physical);
+
+	return (int)result.physical;
+}
+
+static int get_prop_batt_current(struct pm8921_bms_chip *chip)
+{
+	int result_ua, rc;
+
+	rc = pm8921_bms_get_battery_current(&result_ua);
+	if (rc == -ENXIO) {
+		   rc = pm8xxx_ccadc_get_battery_current(&result_ua);
+	}
+
+	if (rc) {
+		   pr_err("unable to get batt current rc = %d\n", rc);
+		   return rc;
+	} else {
+		   return result_ua;
+	}
+}
+
+static void bms_soc_monitor_work(struct work_struct *work)
+{
+	struct pm8921_bms_chip *chip = container_of(work,
+		                   struct pm8921_bms_chip, bms_soc_work.work);
+
+	int vbatt, soc, batt_temp, ibat;
+
+	soc = pm8921_bms_get_percent_charge();
+	batt_temp = get_prop_batt_temp(chip)/10;
+	ibat = get_prop_batt_current(chip);
+	get_battery_uvolts(chip, &vbatt);
+
+	pr_info("[BMS_INFO] soc=%d%% vbatt=%dV temp=%d ibat=%dmA\n", soc, vbatt/1000, batt_temp, ibat/1000);
+
+	schedule_delayed_work(&chip->bms_soc_work,
+		           round_jiffies_relative(msecs_to_jiffies
+		           (BMS_SOC_INFORM_TIME)));
+	pm8921_charger_force_update_batt_psy();
+}
+#endif
+
 
 #define HKADC_CALIB_DELAY_S	600
 #define HKADC_CALIB_DELTA_TEMP	20
@@ -2299,7 +2584,7 @@ static int calculate_state_of_charge(struct pm8921_bms_chip *chip,
 
 	pr_debug("RUC = %duAh\n", remaining_usable_charge_uah);
 	if (fcc_uah - unusable_charge_uah <= 0) {
-		pr_debug("FCC = %duAh, UUC = %duAh forcing soc = 0\n",
+		pr_warn("FCC = %duAh, UUC = %duAh forcing soc = 0\n",
 						fcc_uah, unusable_charge_uah);
 		soc = 0;
 	} else {
@@ -2338,17 +2623,32 @@ static int calculate_state_of_charge(struct pm8921_bms_chip *chip,
 				soc, chip->last_ocv_uv);
 	}
 
+	/* LGE_UPDATE_S dongwon.choi@lge.com 2012-11-20
+	 * add log information for debugging */
+#ifdef CONFIG_LGE_PM
+	pr_debug("rem_usb_chg = %d rem_chg %d,"
+			"cc_uah %d, unusb_chg %d\n",
+			remaining_usable_charge_uah,
+			remaining_charge_uah,
+			cc_uah, unusable_charge_uah);
+	pr_info("last_ocv_uv = %d"
+			"chargecycles = %d, batt_temp = %d"
+			"fcc = %d soc =%d\n",
+			chip->last_ocv_uv, chargecycles, batt_temp,
+			fcc_uah, soc);
+#endif /* CONFIG_LGE_PM */
+	/* LGE_UPDATE_E */
 	if (soc > 100)
 		soc = 100;
 
 	if (soc < 0) {
-		pr_debug("bad rem_usb_chg = %d rem_chg %d,"
+		pr_err("bad rem_usb_chg = %d rem_chg %d,"
 				"cc_uah %d, unusb_chg %d\n",
 				remaining_usable_charge_uah,
 				remaining_charge_uah,
 				cc_uah, unusable_charge_uah);
 
-		pr_debug("for bad rem_usb_chg last_ocv_uv = %d"
+		pr_err("for bad rem_usb_chg last_ocv_uv = %d"
 				"chargecycles = %d, batt_temp = %d"
 				"fcc = %d soc =%d\n",
 				chip->last_ocv_uv, chargecycles, batt_temp,
@@ -2366,7 +2666,7 @@ static int calculate_state_of_charge(struct pm8921_bms_chip *chip,
 		 * to adjust pon ocv since it is a small percent away from
 		 * the real soc
 		 */
-		pr_debug("soc = %d before forcing shutdown_soc = %d\n",
+		pr_info("soc = %d before forcing shutdown_soc = %d\n",
 							soc, shutdown_soc);
 		adjust_rc_and_uuc_for_specific_soc(
 						chip,
@@ -2392,7 +2692,7 @@ static int calculate_state_of_charge(struct pm8921_bms_chip *chip,
 		soc = DIV_ROUND_CLOSEST((remaining_usable_charge_uah * 100),
 					(fcc_uah - unusable_charge_uah));
 
-		pr_debug("DONE for shutdown_soc = %d soc is %d, adjusted ocv to %duV\n",
+		pr_info("DONE for shutdown_soc = %d soc is %d, adjusted ocv to %duV\n",
 				shutdown_soc, soc, chip->last_ocv_uv);
 	}
 	mutex_unlock(&soc_invalidation_mutex);
@@ -2534,14 +2834,18 @@ static int report_state_of_charge(struct pm8921_bms_chip *chip)
 			}
 		} else if (soc < last_soc && soc != 0) {
 			soc = last_soc - 1;
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+		} else if (soc > last_soc && soc < 101) {
+#else
 		} else if (soc > last_soc && soc != 100) {
+#endif		
 			soc = last_soc + 1;
 		}
 	}
 
 	last_soc = bound_soc(soc);
 	backup_soc_and_iavg(chip, batt_temp, last_soc);
-	pr_debug("Reported SOC = %d\n", last_soc);
+	pr_info("Reported SOC = %d\n", last_soc);
 	chip->t_soc_queried = now;
 
 	return last_soc;
@@ -2714,12 +3018,104 @@ EXPORT_SYMBOL(pm8921_bms_get_battery_current);
 
 int pm8921_bms_get_percent_charge(void)
 {
+#ifdef CONFIG_LGE_PM
+	/* L0/L1A, bms_soc_averaging
+	* BMS averaging variable
+	* 2012-04-22, hyemin.cho@lge.com
+	*/
+#ifdef CONFIG_MACH_MSM8960_FX1SK	
+	unsigned long now_adj_sec = 0;
+#endif
+	static int      soc_buf[I_MAX] = {0,};
+	static int      idxBuf = 0;
+	int                     idxsoc = 0;
+	int                     avgSOC = 0;
+	int soc = 0;
+#endif
 	if (!the_chip) {
 		pr_err("called before initialization\n");
 		return -EINVAL;
 	}
+	
+#ifdef CONFIG_LGE_PM
+	soc = report_state_of_charge(the_chip);
 
+	if (soc == -ETIMEDOUT)
+		return last_reported_SOC;
+
+	/* 5% Compensation of SOC Value, need to verify.
+	* 2012-04-09, junsin.park@lge.com
+	*/
+	soc = (soc*100/95);
+
+	/* average of last 30 measured comp_soc value */
+	if (cntSOC == 0) { /* access once */
+		for (idxsoc = 0; idxsoc < I_MAX; idxsoc++)
+			   soc_buf[idxsoc] = soc;
+
+		avgSOC = soc;
+		cntSOC = I_MAX;
+		idxBuf = 1;
+	} else {
+		if (idxBuf >= I_MAX)
+			   idxBuf = 0;
+
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+		if( chg_plugged_in() != 1  && 
+			( soc == 98 || soc == 78 || soc == 58 || soc == 38 || soc == 18)  )
+		{
+			if(the_chip->adj_sec == 0)
+			{
+				get_current_time(&now_adj_sec);
+				pr_info("adj_sec = %ld, now_adj_sec = %ld \n",
+					the_chip->adj_sec, now_adj_sec );
+				the_chip->adj_sec = now_adj_sec;
+				soc++;
+			}
+			else 
+			{
+				if(calculate_adj_delta_time(the_chip) <= 70)
+					soc++;
+			}		
+		}
+		else if ( soc == 100 || soc == 80 || soc == 60 || soc == 40 || soc == 20  
+			      || soc == 97 || soc == 77 || soc == 57 || soc == 37 || soc == 17 )
+			   the_chip->adj_sec = 0;   
+#endif
+		soc_buf[idxBuf] = soc;
+		
+		idxBuf++;
+
+		avgSOC = cal_rnd_avg(soc_buf);
+	}
+
+	soc = avgSOC;
+
+	if (soc > 100)
+		soc = 100;
+	pr_debug("SOC = %u%%\n", soc);
+
+#ifndef CONFIG_MACH_MSM8960_FX1
+	if (last_reported_SOC == -EINVAL || soc <= last_reported_SOC) {
+		last_reported_SOC = soc;
+	} else {
+	/*
+	* soc > last_reported_SOC
+	* the device must be charging for reporting a higher soc, if
+	* not ignore this soc and continue reporting the last_soc
+	*/
+		if (the_chip->start_percent != -EINVAL || chg_plugged_in())
+			   last_reported_SOC = soc;
+		else
+			   pr_debug("soc = %d reporting last_soc = %d\n", soc, last_reported_SOC);
+	}
+	pr_debug("Reported SOC = %u%%\n", last_reported_SOC);
+#endif
+	last_reported_SOC = soc;
+	return last_reported_SOC;
+#else	
 	return report_state_of_charge(the_chip);
+#endif	
 }
 EXPORT_SYMBOL_GPL(pm8921_bms_get_percent_charge);
 
@@ -2729,7 +3125,9 @@ int pm8921_bms_get_current_max(void)
 		pr_err("called before initialization\n");
 		return -EINVAL;
 	}
+
 	return the_chip->imax_ua;
+
 }
 EXPORT_SYMBOL_GPL(pm8921_bms_get_current_max);
 
@@ -2793,6 +3191,9 @@ void pm8921_bms_charging_began(void)
 		pr_debug("Start real soc = %d, start pc = %d\n",
 			the_chip->start_real_soc, the_chip->pc_at_start_charge);
 	}
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+	bEOC_NOT_100 = 0;
+#endif
 
 	pr_debug("start_percent = %u%%\n", the_chip->start_percent);
 }
@@ -2989,6 +3390,15 @@ void pm8921_bms_charging_end(int is_battery_full)
 	the_chip->prev_chg_soc = -EINVAL;
 	pm_bms_masked_write(the_chip, BMS_TOLERANCES,
 				IBAT_TOL_MASK, IBAT_TOL_NOCHG);
+#ifdef CONFIG_MACH_MSM8960_FX1SK
+	if (last_soc < 100 )
+	{
+		bEOC_NOT_100=1;
+		pr_info("last_soc = %d\n",	last_soc);
+	}	
+#endif 
+
+	
 }
 EXPORT_SYMBOL_GPL(pm8921_bms_charging_end);
 
@@ -3141,7 +3551,11 @@ static void check_initial_ocv(struct pm8921_bms_chip *chip)
 	 */
 	ocv_uv = 0;
 	pm_bms_read_output_data(chip, LAST_GOOD_OCV_VALUE, &ocv_raw);
+#ifdef CONFIG_LGE_PM
+	usb_chg = chg_plugged_in();
+#else /* QCT original */
 	usb_chg = usb_chg_plugged_in(chip);
+#endif
 	rc = convert_vbatt_raw_to_uv(chip, usb_chg, ocv_raw, &ocv_uv);
 	if (rc || ocv_uv == 0) {
 		rc = adc_based_ocv(chip, &ocv_uv);
@@ -3154,6 +3568,7 @@ static void check_initial_ocv(struct pm8921_bms_chip *chip)
 	pr_debug("ocv_uv = %d last_ocv_uv = %d\n", ocv_uv, chip->last_ocv_uv);
 }
 
+#if !defined(CONFIG_LGE_PM)
 static int64_t read_battery_id(struct pm8921_bms_chip *chip)
 {
 	int rc;
@@ -3169,6 +3584,7 @@ static int64_t read_battery_id(struct pm8921_bms_chip *chip)
 						result.measurement);
 	return result.adc_code;
 }
+#endif
 
 #define PALLADIUM_ID_MIN	0x7F40
 #define PALLADIUM_ID_MAX	0x7F5A
@@ -3176,6 +3592,126 @@ static int64_t read_battery_id(struct pm8921_bms_chip *chip)
 #define DESAY_5200_ID_MAX	0x802F
 static int set_battery_data(struct pm8921_bms_chip *chip)
 {
+#if defined(CONFIG_LGE_PM)
+#if defined(CONFIG_MACH_MSM8960_L0)
+        if (lge_get_board_revno() < HW_REV_D) {
+                pr_info("[BMS] Battery profile data is set to LGC_BL44JS_1700\n");
+                chip->fcc = LGC_BL44JS_1700_data.fcc;
+                chip->fcc_temp_lut = LGC_BL44JS_1700_data.fcc_temp_lut;
+                chip->fcc_sf_lut = LGC_BL44JS_1700_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = LGC_BL44JS_1700_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = LGC_BL44JS_1700_data.pc_sf_lut;
+                chip->rbatt_sf_lut = LGC_BL44JS_1700_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = LGC_BL44JS_1700_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = LGC_BL44JS_1700_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_LGCHEM;
+                return 0;
+        } else {
+                pr_info("[BMS] Battery profile data is set to LGC_BL44JH_1700\n");
+                chip->fcc = LGC_BL44JH_1700_data.fcc;
+                chip->fcc_temp_lut = LGC_BL44JH_1700_data.fcc_temp_lut;
+                chip->fcc_sf_lut = LGC_BL44JH_1700_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = LGC_BL44JH_1700_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = LGC_BL44JH_1700_data.pc_sf_lut;
+                chip->rbatt_sf_lut = LGC_BL44JH_1700_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = LGC_BL44JH_1700_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = LGC_BL44JH_1700_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_LGCHEM;
+                return 0;
+        }
+#elif defined(CONFIG_MACH_MSM8960_FX1)
+        if (lge_battery_info == BATT_ISL6296_C || lge_battery_info == BATT_DS2704_L) {
+                pr_info("[BMS] Battery profile data is set to LGC_BL54SH_2500\n");
+                chip->fcc = LGC_BL54SH_2500_data.fcc;
+                chip->fcc_temp_lut = LGC_BL54SH_2500_data.fcc_temp_lut;
+                chip->fcc_sf_lut = LGC_BL54SH_2500_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = LGC_BL54SH_2500_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = LGC_BL54SH_2500_data.pc_sf_lut;
+                chip->rbatt_sf_lut = LGC_BL54SH_2500_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = LGC_BL54SH_2500_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = LGC_BL54SH_2500_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_LGCHEM;
+                return 0;
+        } else if (lge_battery_info == BATT_ISL6296_L || lge_battery_info == BATT_DS2704_C) {
+                pr_info("[BMS] Battery profile data is set to SANYO_BL54SH_2500\n");
+                chip->fcc = SANYO_BL54SH_2500_data.fcc;
+                chip->fcc_temp_lut = SANYO_BL54SH_2500_data.fcc_temp_lut;
+                chip->fcc_sf_lut = SANYO_BL54SH_2500_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = SANYO_BL54SH_2500_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = SANYO_BL54SH_2500_data.pc_sf_lut;
+                chip->rbatt_sf_lut = SANYO_BL54SH_2500_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = SANYO_BL54SH_2500_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = SANYO_BL54SH_2500_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_PANASONIC;
+                return 0;
+        } else {
+                pr_err("[BMS]Batt id is unknown, battery data is set to SANYO_BL54SH_2500\n");
+                chip->fcc = SANYO_BL54SH_2500_data.fcc;
+                chip->fcc_temp_lut = SANYO_BL54SH_2500_data.fcc_temp_lut;
+                chip->fcc_sf_lut = SANYO_BL54SH_2500_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = SANYO_BL54SH_2500_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = SANYO_BL54SH_2500_data.pc_sf_lut;
+                chip->rbatt_sf_lut = SANYO_BL54SH_2500_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = SANYO_BL54SH_2500_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = SANYO_BL54SH_2500_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_UNKNOWN;
+                return 0;
+        }
+#elif defined(CONFIG_MACH_MSM8960_L1v)
+        /* LGC */
+        if (lge_battery_info == BATT_ISL6296_C || lge_battery_info == BATT_DS2704_L) {
+                pr_err("[BMS] Battery profile data is set to LGC(LGE_L1_VZW_LG_CHEM_BL-59JH_data)\n");
+                chip->fcc = LGE_L1_VZW_LG_CHEM_BL_data.fcc;
+                chip->fcc_temp_lut      = LGE_L1_VZW_LG_CHEM_BL_data.fcc_temp_lut;
+                chip->fcc_sf_lut = LGE_L1_VZW_LG_CHEM_BL_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = LGE_L1_VZW_LG_CHEM_BL_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = LGE_L1_VZW_LG_CHEM_BL_data.pc_sf_lut;
+                chip->rbatt_sf_lut = LGE_L1_VZW_LG_CHEM_BL_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = LGE_L1_VZW_LG_CHEM_BL_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = LGE_L1_VZW_LG_CHEM_BL_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_LGCHEM;
+                return 0;
+        /* TOCAD */
+        } else if (lge_battery_info == BATT_ISL6296_L || lge_battery_info == BATT_DS2704_C) {
+                pr_err("[BMS] Battery profile data is set to TOCAD(LGE_L1_VZW_Tocad_Dongwha_BL-59JH_data)\n");
+                chip->fcc = LGE_L1_VZW_Tocad_Dongwha_BL_data.fcc;
+                chip->fcc_temp_lut = LGE_L1_VZW_Tocad_Dongwha_BL_data.fcc_temp_lut;
+                chip->fcc_sf_lut = LGE_L1_VZW_Tocad_Dongwha_BL_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = LGE_L1_VZW_Tocad_Dongwha_BL_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = LGE_L1_VZW_Tocad_Dongwha_BL_data.pc_sf_lut;
+                chip->rbatt_sf_lut = LGE_L1_VZW_Tocad_Dongwha_BL_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = LGE_L1_VZW_Tocad_Dongwha_BL_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = LGE_L1_VZW_Tocad_Dongwha_BL_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_PANASONIC;
+                return 0;
+        } else {
+                pr_err("[BMS] Battery profile data is set to LGC(LGE_L1_VZW_LG_CHEM_BL-59JH_data),but batt_id is wrong\n");
+                chip->fcc = LGE_L1_VZW_LG_CHEM_BL_data.fcc;
+                chip->fcc_temp_lut = LGE_L1_VZW_LG_CHEM_BL_data.fcc_temp_lut;
+                chip->fcc_sf_lut = LGE_L1_VZW_LG_CHEM_BL_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = LGE_L1_VZW_LG_CHEM_BL_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = LGE_L1_VZW_LG_CHEM_BL_data.pc_sf_lut;
+                chip->rbatt_sf_lut = LGE_L1_VZW_LG_CHEM_BL_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = LGE_L1_VZW_LG_CHEM_BL_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = LGE_L1_VZW_LG_CHEM_BL_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_UNKNOWN;
+                return 0;
+        }
+#else   /* L1A, D1L */
+                pr_info("[BMS] Battery profile data is set to LGC_BL53QH_2000\n");
+                chip->fcc = LGC_BL53QH_2000_data.fcc;
+                chip->fcc_temp_lut = LGC_BL53QH_2000_data.fcc_temp_lut;
+                chip->fcc_sf_lut = LGC_BL53QH_2000_data.fcc_sf_lut;
+                chip->pc_temp_ocv_lut = LGC_BL53QH_2000_data.pc_temp_ocv_lut;
+                chip->pc_sf_lut = LGC_BL53QH_2000_data.pc_sf_lut;
+                chip->rbatt_sf_lut = LGC_BL53QH_2000_data.rbatt_sf_lut;
+                chip->default_rbatt_mohm = LGC_BL53QH_2000_data.default_rbatt_mohm;
+                chip->delta_rbatt_mohm = LGC_BL53QH_2000_data.delta_rbatt_mohm;
+                chip->batt_type = BATT_LGCHEM;
+                return 0;
+#endif
+
+#else /* QCT Original */
 	int64_t battery_id;
 
 	if (chip->batt_type == BATT_DESAY)
@@ -3224,6 +3760,8 @@ desay:
 		chip->rbatt_capacitive_mohm
 			= desay_5200_data.rbatt_capacitive_mohm;
 		return 0;
+
+#endif		
 }
 
 enum bms_request_operation {
@@ -3671,6 +4209,55 @@ restore_sbi_config:
 	return 0;
 }
 
+/* Add voltage sysfs node for lg power test in factory
+  * 2012-05-28, junsin.park@lge.com
+  */
+#ifdef CONFIG_LGE_PM
+ssize_t bms_show_vbatt(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int vbatt = 0;
+	if (the_chip == NULL)
+		return snprintf(buf, PAGE_SIZE, "ERROR\n");
+
+	pm8921_charger_enable(0);
+	msleep(1000);
+	get_battery_uvolts(the_chip, &vbatt);
+	pm8921_charger_enable(1);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", vbatt);
+}
+DEVICE_ATTR(vbatt, 0444, bms_show_vbatt, NULL);
+
+/* LGE_UPDATE_S [dongwon.choi@lge.com] 2012-12-24
+ * add sysfs for identifying battery cell */
+#define MAXLEN_BATTCELL_VENDOR		20
+ssize_t bms_show_batt_cell(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int res = 0;
+
+	if (the_chip == NULL) {
+		pr_err("the chip is null\n");
+		res = snprintf(buf, MAXLEN_BATTCELL_VENDOR, "%s\n", "Error");
+		return res;
+	}
+
+	if (the_chip->batt_type == BATT_LGCHEM) {
+		pr_info("selected Battery cell is LG Chem\n");
+		res = snprintf(buf, MAXLEN_BATTCELL_VENDOR, "%s\n", "LG Chem");
+	} else if (the_chip->batt_type == BATT_PANASONIC) {
+		pr_info("selected Battery cell is Panasonic\n");
+		res = snprintf(buf, MAXLEN_BATTCELL_VENDOR, "%s\n", "Panasonic");
+	} else {
+		pr_info("selected Battery cell is unknown\n");
+		res = snprintf(buf, MAXLEN_BATTCELL_VENDOR, "%s\n", "Unknown");
+	}
+
+	return res;
+}
+DEVICE_ATTR(batt_cell, 0444, bms_show_batt_cell, NULL);
+/* LGE_UPDATE_E */
+#endif
+
 static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -3786,6 +4373,15 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 	chip->low_voltage_detect = pdata->low_voltage_detect;
 	chip->vbatt_cutoff_retries = pdata->vbatt_cutoff_retries;
 
+	/* dongwon.choi */
+#ifdef CONFIG_LGE_PM
+	chip->first_fixed_iavg_ma = pdata->first_fixed_iavg_ma;
+	chip->shutdown_soc_threshold = pdata->shutdown_soc_threshold;
+#ifdef CONFIG_MACH_MSM8960_FX1SK	
+	chip->adj_sec	= 0;
+#endif
+#endif /* CONFIG_LGE_PM */
+
 	mutex_init(&chip->calib_mutex);
 	INIT_WORK(&chip->calib_hkadc_work, calibrate_hkadc_work);
 
@@ -3814,6 +4410,16 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, chip);
 	the_chip = chip;
 	create_debugfs_entries(chip);
+	
+#ifdef CONFIG_LGE_PM
+	/* Add voltage sysfs node for lg power test in factory
+	 * 2012-05-28, junsin.park@lge.com */
+	rc = device_create_file(&pdev->dev, &dev_attr_vbatt);
+
+	/* LGE_UPDATE_S [dongwon.choi@lge.com] 2012-12-24
+	 * add sysfs for identifying battery cell */
+	rc = device_create_file(&pdev->dev, &dev_attr_batt_cell);
+#endif
 
 	rc = read_ocv_trim(chip);
 	if (rc) {
@@ -3825,7 +4431,7 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 	/* enable the vbatt reading interrupts for scheduling hkadc calib */
 	pm8921_bms_enable_irq(chip, PM8921_BMS_GOOD_OCV);
 	pm8921_bms_enable_irq(chip, PM8921_BMS_OCV_FOR_R);
-
+#ifndef CONFIG_LGE_PM
 	rc = pm8921_bms_configure_batt_alarm(chip);
 	if (rc) {
 		pr_err("Couldn't configure battery alarm! rc=%d\n", rc);
@@ -3837,7 +4443,7 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 		pr_err("Couldn't enable battery alarm! rc=%d\n", rc);
 		goto free_irqs;
 	}
-
+#endif
 	calculate_soc_work(&(chip->calculate_soc_delayed_work.work));
 
 	rc = get_battery_uvolts(chip, &vbatt);
@@ -3847,6 +4453,15 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 				vbatt, chip->last_ocv_uv);
 	else
 		pr_info("Unable to read battery voltage at boot\n");
+
+/* L0/L1A, bms_soc_logging
+ * Workaround for BMS error Debugging
+ * 2012-03-30, hyemin.cho@lge.com
+ */
+#ifdef CONFIG_LGE_PM
+	INIT_DELAYED_WORK(&chip->bms_soc_work, bms_soc_monitor_work);
+	schedule_delayed_work(&chip->bms_soc_work, 0);
+#endif
 
 	return 0;
 
@@ -3864,6 +4479,11 @@ static int __devexit pm8921_bms_remove(struct platform_device *pdev)
 {
 	struct pm8921_bms_chip *chip = platform_get_drvdata(pdev);
 
+#ifdef CONFIG_LGE_PM
+	device_remove_file(&pdev->dev, &dev_attr_vbatt);
+	device_remove_file(&pdev->dev, &dev_attr_batt_cell);
+#endif /* CONFIG_LGE_PM */
+
 	free_irqs(chip);
 	kfree(chip->adjusted_fcc_temp_lut);
 	platform_set_drvdata(pdev, NULL);
@@ -3875,7 +4495,9 @@ static int __devexit pm8921_bms_remove(struct platform_device *pdev)
 static int pm8921_bms_suspend(struct device *dev)
 {
 	struct pm8921_bms_chip *chip = dev_get_drvdata(dev);
-
+#ifdef CONFIG_LGE_PM
+	cancel_delayed_work(&chip->bms_soc_work);
+#endif
 	cancel_delayed_work_sync(&chip->calculate_soc_delayed_work);
 
 	chip->last_soc_at_suspend = last_soc;
@@ -3885,10 +4507,12 @@ static int pm8921_bms_suspend(struct device *dev)
 
 static int pm8921_bms_resume(struct device *dev)
 {
+	struct pm8921_bms_chip *chip = dev_get_drvdata(dev);
+#ifndef CONFIG_MACH_MSM8960_FX1SK
 	int rc;
 	unsigned long time_since_last_recalc;
 	unsigned long tm_now_sec;
-	struct pm8921_bms_chip *chip = dev_get_drvdata(dev);
+
 
 	rc = get_current_time(&tm_now_sec);
 	if (rc) {
@@ -3910,9 +4534,14 @@ static int pm8921_bms_resume(struct device *dev)
 	}
 	chip->first_report_after_suspend = true;
 	update_power_supply(chip);
+#endif	
+#ifdef CONFIG_LGE_PM	
+	schedule_delayed_work(&chip->bms_soc_work, 0);	
+	schedule_delayed_work(&chip->calculate_soc_delayed_work,0);
+#else
 	schedule_delayed_work(&chip->calculate_soc_delayed_work,
 				msecs_to_jiffies(chip->soc_calc_period));
-
+#endif
 	return 0;
 }
 

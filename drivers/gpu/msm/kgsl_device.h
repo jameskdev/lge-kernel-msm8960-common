@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2012,2014 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -451,9 +451,6 @@ kgsl_device_get_drvdata(struct kgsl_device *dev)
 
 void kgsl_context_destroy(struct kref *kref);
 
-int kgsl_memfree_find_entry(pid_t pid, unsigned long *gpuaddr,
-	unsigned long *size, unsigned int *flags);
-
 /**
  * kgsl_context_put - Release context reference count
  * @context
@@ -559,45 +556,4 @@ static inline void kgsl_cancel_events_timestamp(struct kgsl_device *device,
 	kgsl_signal_event(device, context, timestamp, KGSL_EVENT_CANCELLED);
 }
 
-
-/**
-* kgsl_process_private_get() - increment the refcount on a kgsl_process_private
-*   struct
-* @process: Pointer to the KGSL process_private
-*
-* Returns 0 if the structure is invalid and a reference count could not be
-* obtained, nonzero otherwise.
-*/
-static inline int kgsl_process_private_get(struct kgsl_process_private *process)
-{
-	int ret = 0;
-	if (process != NULL)
-		ret = kref_get_unless_zero(&process->refcount);
-	return ret;
-}
-
-void kgsl_process_private_put(struct kgsl_process_private *private);
-
-
-struct kgsl_process_private *kgsl_process_private_find(pid_t pid);
-
-/**
- * kgsl_sysfs_store() - parse a string from a sysfs store function
- * @buf: Incoming string to parse
- * @ptr: Pointer to an unsigned int to store the value
- */
-static inline int kgsl_sysfs_store(const char *buf, unsigned int *ptr)
-{
-	unsigned int val;
-	int rc;
-
-	rc = kstrtou32(buf, 0, &val);
-	if (rc)
-		return rc;
-
-	if (ptr)
-		*ptr = val;
-
-	return 0;
-}
 #endif  /* __KGSL_DEVICE_H */

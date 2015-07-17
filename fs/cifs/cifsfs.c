@@ -61,7 +61,11 @@ unsigned int global_secflags = CIFSSEC_DEF;
 /* unsigned int ntlmv2_support = 0; */
 unsigned int sign_CIFS_PDUs = 1;
 static const struct super_operations cifs_super_ops;
+#if !defined(CONFIG_MACH_MSM8960_FX1) && !defined(CONFIG_MACH_MSM8960_VU2)
 unsigned int CIFSMaxBufSize = CIFS_MAX_MSGSIZE;
+#else
+unsigned int CIFSMaxBufSize = 32768;
+#endif
 module_param(CIFSMaxBufSize, int, 0);
 MODULE_PARM_DESC(CIFSMaxBufSize, "Network buffer size (not including header). "
 				 "Default: 16384 Range: 8192 to 130048");

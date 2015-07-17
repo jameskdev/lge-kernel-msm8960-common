@@ -188,13 +188,23 @@ struct anc_header {
 	u32 reserved[3];
 	u32 num_anc_slots;
 };
-
+#ifdef CONFIG_SWITCH_FSA8008
+enum tabla_mclk_bg_state {
+        MCLK_OFF_BANDGAP_OFF = 0,
+        MCLK_ON_BANDGAP_ON = 1,
+        MCLK_OF_BANDGAP_ON,
+        };
+#endif
 extern int tabla_mclk_enable(struct snd_soc_codec *codec, int mclk_enable,
 			     bool dapm);
 
 extern void *tabla_mbhc_cal_btn_det_mp(const struct tabla_mbhc_btn_detect_cfg
 				       *btn_det,
 				       const enum tabla_mbhc_btn_det_mem mem);
+#ifdef CONFIG_SWITCH_FSA8008
+extern void tabla_register_mclk_call_back(struct snd_soc_codec *codec,
+    int (*mclk_cb_fn) (struct snd_soc_codec *codec, int , bool ));
+#endif
 
 #define TABLA_MBHC_CAL_SIZE(buttons, rload) ( \
 	sizeof(enum tabla_micbias_num) + \
@@ -250,5 +260,12 @@ extern void *tabla_mbhc_cal_btn_det_mp(const struct tabla_mbhc_btn_detect_cfg
 	    sizeof(struct tabla_mbhc_imped_detect_cfg) + \
 	    (cfg_ptr->_n_rload * (sizeof(cfg_ptr->_rload[0]) + \
 				 sizeof(cfg_ptr->_alpha[0]))))
-
+#ifdef CONFIG_SWITCH_FSA8008
+/*
+* 2012-02-06, mint.choi@lge.com
+* Enable/disable fsa8008 mic bias when inserting and removing
+* this API called by fsa8008 driver
+*/
+extern void tabla_codec_micbias2_ctl(int enable);
+#endif
 

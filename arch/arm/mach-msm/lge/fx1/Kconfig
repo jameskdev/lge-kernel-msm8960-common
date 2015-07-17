@@ -1,0 +1,59 @@
+config BOARD_HEADER_FILE
+	string "LGE board specific header file name"
+	default ""
+
+config MACH_MSM8960_FX1
+	depends on ARCH_MSM8960
+	select MACH_LGE
+	bool "MSM8960 FX1"
+	help
+	  Support for the LGE MSM8960 FX1 device.
+
+choice
+	depends on MACH_MSM8960_FX1
+	prompt "FX1 Board Selection"
+	default MACH_MSM8960_FX1A
+
+config MACH_MSM8960_FX1A
+	bool "MSM8960 FX1 AT&T"
+	help
+	  Support for the LGE MSM8960 FX1 AT&T device.
+
+config MACH_MSM8960_FX1S
+	bool "MSM8960 FX1 SPR"
+	help
+	  Support for the LGE MSM8960 FX1 SRE device.
+
+config LGE_DIAG_USB_ACCESS_LOCK
+	tristate "Support LGE diag usb lock command"
+	default n
+	depends on MACH_MSM8960_FX1S
+	help
+	  LGE usb access lock
+
+config MACH_MSM8960_FX1E
+        bool "MSM8960 FX1 EU"
+        help
+          Support for the LGE MSM8960 FX1 EU device.
+
+config MACH_MSM8960_FX1T
+        bool "MSM8960 FX1T"
+        help
+          Support for the LGE MSM8960 FX1T device.
+
+config MACH_MSM8960_FX1V
+        bool "MSM8960 FX1V"
+        help
+          Support for the LGE MSM8960 FX1V device.
+
+config MACH_MSM8960_FX1SK
+        bool "MSM8960 FX1SK"
+        help
+          Support for the LGE MSM8960 FX1SK device.
+          
+config MACH_MSM8960_FX1SU
+        bool "MSM8960 FX1SU"
+        help
+          Support for the LGE MSM8960 FX1SU device.
+
+endchoice

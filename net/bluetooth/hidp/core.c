@@ -672,6 +672,7 @@ static struct hci_conn *hidp_get_connection(struct hidp_session *session)
 	return conn;
 }
 
+
 static int hidp_setup_input(struct hidp_session *session,
 				struct hidp_connadd_req *req)
 {

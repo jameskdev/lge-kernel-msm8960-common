@@ -971,7 +971,17 @@ __be32 inet_select_addr(const struct net_device *dev, __be32 dst, int scope)
 {
 	__be32 addr = 0;
 	struct in_device *in_dev;
-	struct net *net = dev_net(dev);
+	struct net *net;
+
+    //LGE DATA Fix Kernel Crash when dev=0
+    if(dev==NULL) return 0;
+    //LGE DATA Fix Kernel Crash when dev=0
+
+    net= dev_net(dev);
+
+    //LGE DATA Fix Kernel Crash when net=0
+    if(net==NULL) return 0;
+    //LGE DATA Fix Kernel Crash when net=0
 
 	rcu_read_lock();
 	in_dev = __in_dev_get_rcu(dev);

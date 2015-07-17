@@ -20,6 +20,16 @@ config DIAG_OVER_USB
 	 This feature helps segregate code required for DIAG traffic to go over USB.
 endmenu
 
+menu "SLATE Support" 
+
+config LGE_SLATE 
+	bool "Enable SLATE Key Logging message routing" 
+	depends on DIAG_OVER_USB 
+	default y 
+	help 
+	This feature helps decide whether slate key logging start message would be routed to apps or not. 
+endmenu 
+
 menu "SDIO support for DIAG"
 
 config DIAG_SDIO_PIPE
@@ -39,3 +49,54 @@ config DIAGFWD_BRIDGE_CODE
 	help
 	 SMUX/HSIC Transport Layer for DIAG Router
 endmenu
+
+menu "LGE DM APP Support"
+
+config LGE_DM_APP
+	bool "LGE DM APP Support"
+	default n
+	depends on MACH_LGE
+	help
+	 LGE DM APP Support
+endmenu
+
+menu "LGE DM DEV Support"
+
+config LGE_DM_DEV
+    bool "LGE DM DEV Support"
+    default n
+    depends on MACH_LGE
+    help
+     LGE DM DEV Support
+endmenu
+
+menu "LGE DIAG MTS Daemon Support"
+
+config LGE_MTS
+	bool "LGE Diag MTS Daemon Support"
+	default n
+	depends on MACH_LGE
+	help
+	 LGE DIAG MTS Support
+endmenu
+
+menu "LGE DIAG table update twice"
+
+config LGE_DIAG_TABLE_UPDATE_TWICE
+	bool "LGE DIAG table update twice"
+	default n
+	depends on MACH_LGE
+	help
+	 LGE DIAG table twice
+endmenu
+
+menu "LGE MTS char device"
+
+config LGE_MTS_CHAR
+	bool "LGE MTS char device"
+	default n
+	depends on MACH_LGE
+	help
+	 LGE MTS Support
+endmenu
+

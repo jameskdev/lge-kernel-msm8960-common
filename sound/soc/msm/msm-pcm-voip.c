@@ -252,6 +252,48 @@ static int msm_voip_fens_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+//[AUDIO_BSP] 20120213, mint.choi@lge.com, modified voip volume level for domestic models
+#if defined(CONFIG_MACH_MSM8960_D1LSK) || defined(CONFIG_MACH_MSM8960_D1LKT) || defined(CONFIG_MACH_MSM8960_D1LU) || defined(CONFIG_MACH_MSM8960_L1sk) || defined(CONFIG_MACH_MSM8960_L1kt) || defined(CONFIG_MACH_MSM8960_L1u)
+static struct snd_kcontrol_new msm_voip_controls[] = {
+	SOC_SINGLE_EXT("Voip Tx Mute", SND_SOC_NOPM, 0, 1, 0,
+				msm_voip_mute_get, msm_voip_mute_put),
+	SOC_SINGLE_EXT("Voip Rx Volume", SND_SOC_NOPM, 0, 9, 0,
+				msm_voip_volume_get, msm_voip_volume_put),
+	SOC_SINGLE_MULTI_EXT("Voip Mode Rate Config", SND_SOC_NOPM, 0, 23850,
+				0, 2, msm_voip_mode_rate_config_get,
+				msm_voip_mode_rate_config_put),
+	SOC_SINGLE_EXT("Voip Dtx Mode", SND_SOC_NOPM, 0, 1, 0,
+				msm_voip_dtx_mode_get, msm_voip_dtx_mode_put),
+};
+//[AUDIO_BSP]_START, 20120307, junday.lee, modified voip volume level(6->7) for Metro-PCS, D1LA, D1LV, L_DCM
+#elif defined(CONFIG_MACH_MSM8960_L0) || defined(CONFIG_MACH_MSM8960_D1LV) || defined(CONFIG_MACH_MSM8960_D1LA) || defined(CONFIG_MACH_MSM8960_L_DCM) || defined(CONFIG_MACH_MSM8960_L1A) || defined(CONFIG_MACH_MSM8960_L1m) || defined(CONFIG_MACH_MSM8960_L1v) || defined(CONFIG_MACH_MSM8960_FX1S) || defined(CONFIG_MACH_MSM8960_FX1SU) || defined(CONFIG_MACH_MSM8960_L1E_EVE_GB)
+static struct snd_kcontrol_new msm_voip_controls[] = {
+	SOC_SINGLE_EXT("Voip Tx Mute", SND_SOC_NOPM, 0, 1, 0,
+				msm_voip_mute_get, msm_voip_mute_put),
+	SOC_SINGLE_EXT("Voip Rx Volume", SND_SOC_NOPM, 0, 7, 0,
+				msm_voip_volume_get, msm_voip_volume_put),
+	SOC_SINGLE_MULTI_EXT("Voip Mode Rate Config", SND_SOC_NOPM, 0, 23850,
+				0, 2, msm_voip_mode_rate_config_get,
+				msm_voip_mode_rate_config_put),
+	SOC_SINGLE_EXT("Voip Dtx Mode", SND_SOC_NOPM, 0, 1, 0,
+				msm_voip_dtx_mode_get, msm_voip_dtx_mode_put),
+};
+//[AUDIO_BSP]_END, 20120307, junday.lee
+//[AUDIO_BSP]_START, 20120817, sungsoo.jung@lge.com, integrate volume level for FX1 models
+#elif defined(CONFIG_LGE_AUDIO_VOICE_CALL_RX_10)
+static struct snd_kcontrol_new msm_voip_controls[] = {
+	SOC_SINGLE_EXT("Voip Tx Mute", SND_SOC_NOPM, 0, 1, 0,
+				msm_voip_mute_get, msm_voip_mute_put),
+	SOC_SINGLE_EXT("Voip Rx Volume", SND_SOC_NOPM, 0, 9, 0,
+				msm_voip_volume_get, msm_voip_volume_put),
+	SOC_SINGLE_MULTI_EXT("Voip Mode Rate Config", SND_SOC_NOPM, 0, 23850,
+				0, 2, msm_voip_mode_rate_config_get,
+				msm_voip_mode_rate_config_put),
+	SOC_SINGLE_EXT("Voip Dtx Mode", SND_SOC_NOPM, 0, 1, 0,
+				msm_voip_dtx_mode_get, msm_voip_dtx_mode_put),
+};
+//[AUDIO_END]_START, 20120817, sungsoo.jung@lge.com, integrate volume level for FX1 models
+#else
 static struct snd_kcontrol_new msm_voip_controls[] = {
 	SOC_SINGLE_EXT("Voip Tx Mute", SND_SOC_NOPM, 0, 1, 0,
 				msm_voip_mute_get, msm_voip_mute_put),
@@ -265,7 +307,7 @@ static struct snd_kcontrol_new msm_voip_controls[] = {
 	SOC_SINGLE_EXT("FENS_VOIP Enable", SND_SOC_NOPM, 0, 1, 0,
 			   msm_voip_fens_get, msm_voip_fens_put),
 };
-
+#endif
 static int msm_pcm_voip_probe(struct snd_soc_platform *platform)
 {
 	snd_soc_add_platform_controls(platform, msm_voip_controls,

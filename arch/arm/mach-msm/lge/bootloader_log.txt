@@ -1,0 +1,87 @@
+
+						Bootloader Log Buffer
+			-Showing bootloader's log in Kernel Message-
+	
+
+ There are only one method for look bootloader's log. But this method 
+is using UART by JIG. And you must rebuild the bootloader after change 
+the UART configuration. This process is so cumbersome. 
+ This patchs are offered see bootloader's log without rebuild and JIG.
+You can see logs of both secondary bootloader(SBL) and apps bootloader(LK)
+in kernel log after applying this two patches.
+
+ - How to apply this patch
+ 	1. kernel
+		1) go to android/kernel
+		2) patch -p1 < kernel.patch
+	2. LK
+		1) go to android/bootable/bootloader/lk
+		2) patch -p1 < lk.patch
+
+ - How to enable this functions
+ 	1. kernel 
+		1) Enable CONFIG_LGE_BOOTLOADER_LOG 
+	2. LK
+		1) Set WITH_DEBUG_LOGBUF to '1'
+		2) Set WITH_DEBUG_SBL to '1' --> To see log of SBL
+
+
+ If you apply as above, you can see log of bootloader.
+
+ The principle of this functions:
+ 	
+ 	- Store the bootloader log in the specific area of RAM(Log Buffer)
+	- kernel read this area and output it to kernel message.
+	- ATAG is used to interface of kernel and bootloader(lk)
+
+
+	-------------      Log store   --------------
+	| bootloader| ---------------> | bootloader | 
+	-------------				   | Log buffer |
+		|						   --------------
+		| Information of Boot			|read(from RAM)			   
+		| loader's Log buffer ----------------------  read
+		|-------------------->|lge_bootloader_log.c| -------> kernel Log
+			(Using ATAG)	  ----------------------
+
+ Structure log buffer:
+ LOGBUF_SIZE ------->  -------------------
+ Physical Address	   |Uint32_t sig 	 | -> Checking the whether presence vaild log in Log Buffer.
+ (include/debug.h)	   |-----------------|
+					   |Uint32_t start   | -> Log Buffer Curren Position - Buffer Position of Next Log
+					   |-----------------|
+					   |Uint32_t size	 | -> Log size of stored Log Buffer
+					   |-----------------|
+					   |Uint32_t tot_size| -> Available Total size
+					   |-----------------|
+					   |Uint8_t data[0]	 | -> Actual Log Buffer Pointer
+					   -------------------
+ ATAG(To delivery the Log Buffer information):
+ 	- Tag Number : 0xc0e0c0e0
+	- Sturcture 
+	   --------------------
+	   | TAG Number       | 
+	   |------------------|
+	   |Log Buffer Address| -> Bootloader Log Buffer start Address - physical address
+	   --------------------
+
+
+ The Method Transmittion SBL log to LK
+ 	1. Check the SMEM Address of  SBL1,2,3 Log buffer
+		in msm8960
+		1) SBL1 LOG START ADDR  = SCL_SBL2_LOG_BUF_BASE - SCL_BOOT_LOG_META_INFO_SIZE - SCL_SBL1_BOOT_LOG_BUF_SIZE
+		2) SBL2 LOG START ADDR  = SCL_SBL2_CODE_BASE + SCL_SBL2_TOTAL_SIZE - SCL_SBL2_STACK_SIZE - SCL_SBL2_BOOT_LOG_BUF_SIZE
+		3) SBL3 LOG START ADDR  = SCL_SBL3_CODE_BASE + SCL_SBL3_TOTAL_SIZE - SCL_SBL3_BOOT_LOG_BUF_SIZE
+	2. In LK read logs from SMEM
+		1) Check Each log start addr in include/debug.h
+		2) Addr of 1) is equal to 1.
+		3) Set WITH_DEBUG_SBL to '1'
+
+ The Method of add SBL log in sbl1,2,3
+ 	-> Using boot_log_message functiong
+	ex) boot_log_message("sbl1 Start");
+
+
+
+
+

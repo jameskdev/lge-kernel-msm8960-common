@@ -194,6 +194,10 @@ int q6asm_open_read_compressed(struct audio_client *ac,
 int q6asm_open_write(struct audio_client *ac, uint32_t format);
 
 int q6asm_open_write_compressed(struct audio_client *ac, uint32_t format);
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+int q6asm_iec_60958_frame_rate_write(struct audio_client *ac, uint32_t sample_rate);
+int q6asm_session_cmd_connect_afe_port(struct audio_client *ac);
+#endif
 
 int q6asm_open_read_write(struct audio_client *ac,
 			uint32_t rd_format,

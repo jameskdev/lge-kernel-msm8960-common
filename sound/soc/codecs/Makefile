@@ -50,6 +50,7 @@ snd-soc-uda134x-objs := uda134x.o
 snd-soc-uda1380-objs := uda1380.o
 snd-soc-wcd9304-objs := wcd9304.o wcd9304-tables.o
 snd-soc-wcd9310-objs := wcd9310.o wcd9310-tables.o
+CFLAGS_wcd9310.o := -Wno-unused
 snd-soc-cs8427-objs := cs8427.o
 snd-soc-wcd9320-objs := wcd9320.o wcd9320-tables.o
 snd-soc-wl1273-objs := wl1273.o
@@ -213,3 +214,9 @@ obj-$(CONFIG_SND_SOC_MSM_STUB)  += snd-soc-msm-stub.o
 obj-$(CONFIG_SND_SOC_MAX9877)	+= snd-soc-max9877.o
 obj-$(CONFIG_SND_SOC_TPA6130A2)	+= snd-soc-tpa6130a2.o
 obj-$(CONFIG_SND_SOC_TPA2028D)	+= tpa2028d.o
+# tarzan.park@lge.com
+#obj-$(CONFIG_LGE_AUDIO_TPA2028D) += tpa2028d.o
+obj-$(CONFIG_LGE_AUDIO) += fsa8008.o
+# LGE_BSP_AUDIO, jeremy.pi@lge.com, 2012-07-20, earSmart eS310 Voice Processor.
+obj-$(CONFIG_EARSMART_310) += es310.o
+CFLAGS_es310.o := -DDEBUG

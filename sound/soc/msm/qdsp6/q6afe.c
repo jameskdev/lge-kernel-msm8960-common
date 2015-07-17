@@ -421,7 +421,7 @@ static void afe_send_cal_block(int32_t path, u16 port_id)
 done:
 	return;
 }
-
+#if 0 //do not support hw_delay in LPASS ver.M8960AAAAANAZL120281
 static int afe_send_hw_delay(u16 port_id, u32 rate)
 {
 	struct hw_delay_entry delay_entry;
@@ -498,7 +498,7 @@ done:
 		__func__, port_id, rate, delay_entry.delay_usec, ret);
 	return ret;
 }
-
+#endif
 void afe_send_cal(u16 port_id)
 {
 	pr_debug("%s\n", __func__);
@@ -647,8 +647,9 @@ int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 
 	/* send AFE cal */
 	afe_send_cal(port_id);
+#if 0 //do not support hw_delay in LPASS ver.M8960AAAAANAZL120281
 	afe_send_hw_delay(port_id, rate);
-
+#endif
 	start.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
 	start.hdr.pkt_size = sizeof(start);
@@ -755,6 +756,11 @@ int afe_open(u16 port_id, union afe_port_config *afe_config, int rate)
 		else
 			config.hdr.opcode = AFE_PORT_CMD_I2S_CONFIG;
 	break;
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+    case HDMI_RX:
+		config.hdr.opcode = AFE_PORT_MULTI_CHAN_HDMI_AUDIO_IF_CONFIG;
+	break;
+#endif
 	default:
 		config.hdr.opcode = AFE_PORT_AUDIO_IF_CONFIG;
 	break;
@@ -1871,6 +1877,19 @@ static int __init afe_init(void)
 	atomic_set(&this_afe.status, 0);
 	this_afe.apr = NULL;
 #ifdef CONFIG_DEBUG_FS
+#ifdef CONFIG_LGE_AUDIO
+	/*
+	 * permission is changed S_IWUGO => S_IWUSR | S_IWGRP
+	 * bob.cho@lge.com, 02/07/2012
+	 */
+	debugfs_afelb = debugfs_create_file("afe_loopback",
+	S_IFREG | S_IWUSR | S_IWGRP, NULL, (void *) "afe_loopback",
+	&afe_debug_fops);
+
+	debugfs_afelb_gain = debugfs_create_file("afe_loopback_gain",
+	S_IFREG | S_IWUSR | S_IWGRP, NULL, (void *) "afe_loopback_gain",
+	&afe_debug_fops);
+#else
 	debugfs_afelb = debugfs_create_file("afe_loopback",
 	0220, NULL, (void *) "afe_loopback",
 	&afe_debug_fops);
@@ -1880,6 +1899,7 @@ static int __init afe_init(void)
 	&afe_debug_fops);
 
 
+#endif
 #endif
 	return 0;
 }

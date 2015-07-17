@@ -32,6 +32,10 @@ static inline s32 msm_cpuidle_get_deep_idle_latency(void) { return 0; }
 #endif
 
 #ifdef CONFIG_CPU_IDLE
+#else
+#endif
+
+#ifdef CONFIG_CPU_IDLE
 int msm_cpuidle_init(void);
 #else
 static inline int msm_cpuidle_init(void) { return -ENOSYS; }

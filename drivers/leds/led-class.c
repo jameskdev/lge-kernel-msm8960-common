@@ -23,6 +23,9 @@
 
 #define LED_BUFF_SIZE 50
 
+#ifdef CONFIG_MACH_MSM8960_VU2
+int suspend = 0;
+#endif
 static struct class *leds_class;
 
 static void led_update_brightness(struct led_classdev *led_cdev)
@@ -138,6 +141,9 @@ static void led_timer_function(unsigned long data)
  */
 void led_classdev_suspend(struct led_classdev *led_cdev)
 {
+#ifdef CONFIG_MACH_MSM8960_VU2
+	suspend = 1 ;
+#endif
 	led_cdev->flags |= LED_SUSPENDED;
 	led_cdev->brightness_set(led_cdev, 0);
 }
@@ -149,6 +155,9 @@ EXPORT_SYMBOL_GPL(led_classdev_suspend);
  */
 void led_classdev_resume(struct led_classdev *led_cdev)
 {
+#ifdef CONFIG_MACH_MSM8960_VU2
+	suspend = 0 ;
+#endif
 	led_cdev->brightness_set(led_cdev, led_cdev->brightness);
 	led_cdev->flags &= ~LED_SUSPENDED;
 }

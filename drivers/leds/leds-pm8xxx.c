@@ -26,6 +26,16 @@
 #include <linux/mfd/pm8xxx/pwm.h>
 #include <linux/leds-pm8xxx.h>
 
+/* LGE_CHANGE_S
+* 2012-10-31, yuntaek.kim@lge.com
+* Indicator Led CP Control Code
+*/
+#include <mach/msm_smsm.h>
+/* LGE_CHANGE_E
+* 2012-10-31, yuntaek.kim@lge.com
+* Indicator Led CP Control Code
+*/
+
 #define SSBI_REG_ADDR_DRV_KEYPAD	0x48
 #define PM8XXX_DRV_KEYPAD_BL_MASK	0xf0
 #define PM8XXX_DRV_KEYPAD_BL_SHIFT	0x04
@@ -105,7 +115,18 @@
 #define PM8XXX_DRV_RGB_RED_LED		BIT(2)
 #define PM8XXX_DRV_RGB_GREEN_LED	BIT(1)
 #define PM8XXX_DRV_RGB_BLUE_LED		BIT(0)
-
+/* LGE_CHANGE_S [dongju99.kim@lge.com] 2012-08-30 */
+#ifdef CONFIG_MACH_MSM8960_VU2
+extern void blue_led_nofi( int blue_level) ;
+int idx0 = 0 ;
+int idx1 = 0 ;
+struct pm8xxx_led_data * green_ledz = NULL ;
+#define NOTIFY_ON  1
+#define NOTIFY_OFF 0
+#define GREEN_CHANNEL 4
+extern int blue_status ;
+#endif
+/* LGE_CHANGE_E [dongju99.kim@lge.com] 2012-09-13 */
 #define MAX_FLASH_LED_CURRENT		300
 #define MAX_LC_LED_CURRENT		40
 #define MAX_KP_BL_LED_CURRENT		300
@@ -147,6 +168,30 @@
 #define PM8XXX_PWM_CURRENT_4MA		4
 #define PM8XXX_PWM_CURRENT_8MA		8
 #define PM8XXX_PWM_CURRENT_12MA		12
+
+#if defined(CONFIG_MACH_MSM8960_L1v)
+/* LGE_CHANGE_S
+* 2012-10-31, yuntaek.kim@lge.com
+* Indicator Led CP Control Code
+*/
+static int led_operation_mode;
+
+/*Indicator LED Status*/
+enum kernel_led_status_type{
+NOTI_LED_OFF = 0,
+NOTI_LED_ON,
+NOTI_LED_SET_BLINKING
+};
+
+enum led_operation_mode_type{
+START_MODE = 0,
+WITH_NOTI_MODE	
+};
+/* LGE_CHANGE_E
+* 2012-10-31, yuntaek.kim@lge.com
+* Indicator Led CP Control Code
+*/
+#endif
 
 /**
  * supported_leds - leds supported for each PMIC version
@@ -203,6 +248,7 @@ struct pm8xxx_led_data {
 	u16			pwm_pause_hi;
 	u16			pwm_pause_lo;
 };
+
 
 static void led_kp_set(struct pm8xxx_led_data *led, enum led_brightness value)
 {
@@ -440,7 +486,41 @@ static int pm8xxx_adjust_brightness(struct led_classdev *led_cdev,
 
 	return level;
 }
-
+#ifdef CONFIG_MACH_MSM8960_VU2
+static int pm8xxx_led_pwm_pattern_update(struct pm8xxx_led_data * led)
+{
+	int start_idx, idx_len0 , idx_len1;
+	int rc =0;
+	start_idx = led->pwm_duty_cycles->start_idx;
+	idx_len0 = led->pwm_duty_cycles->num_duty_pcts0;
+	idx_len1 = led->pwm_duty_cycles->num_duty_pcts1;
+	idx0 = idx_len0 ;
+	idx1 = idx_len1 ;
+	if (idx_len0 >= PM_PWM_LUT_SIZE && start_idx) {
+		pr_err("Wrong LUT size or index\n");
+		return -EINVAL;
+	}
+	if ((start_idx + idx_len0) > PM_PWM_LUT_SIZE) {
+		pr_err("Exceed LUT limit\n");
+		return -EINVAL;
+	}
+	if (idx_len1 >= PM_PWM_LUT_SIZE && start_idx) {
+		pr_err("Wrong LUT size or index\n");
+		return -EINVAL;
+	}
+	if ((start_idx + idx_len1) > PM_PWM_LUT_SIZE) {
+		pr_err("Exceed LUT limit\n");
+		return -EINVAL;
+	}
+	rc = pm8xxx_pwm_lut_config(led->pwm_dev, led->pwm_period_us,
+                   led->pwm_duty_cycles->duty_pcts0,
+                   led->pwm_duty_cycles->duty_ms,
+                   start_idx, idx_len0, 0, 0,
+	               PM8XXX_LED_PWM_FLAGS);
+				   
+	return rc;
+}
+#else
 static int pm8xxx_led_pwm_pattern_update(struct pm8xxx_led_data * led)
 {
 	int start_idx, idx_len;
@@ -527,12 +607,17 @@ static int pm8xxx_led_pwm_pattern_update(struct pm8xxx_led_data * led)
 
 	return rc;
 }
+#endif
 
 static int pm8xxx_led_pwm_work(struct pm8xxx_led_data *led)
 {
 	int duty_us;
 	int rc = 0;
 	int level = 0;
+
+#ifdef CONFIG_MACH_MSM8960_VU2
+	int brightness = 0 ;
+#endif
 
 	level = pm8xxx_adjust_brightness(&led->cdev, led->cdev.brightness);
 
@@ -549,14 +634,42 @@ static int pm8xxx_led_pwm_work(struct pm8xxx_led_data *led)
 				led->cdev.brightness);
 		}
 	} else {
-		if (level) {
-			pm8xxx_led_pwm_pattern_update(led);
-			led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1, level);
+#ifdef CONFIG_MACH_MSM8960_VU2
+		if ( led == green_ledz )
+		{
+		brightness = led->cdev.brightness;
+		printk("GREEN%s%d\n", __func__, brightness );
+		if (led->cdev.brightness)
+			led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1,
+				led->cdev.brightness);
+		rc = pm8xxx_pwm_lut_enable(led->pwm_dev, led->cdev.brightness);
+		if (!led->cdev.brightness)
+			led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1,
+				led->cdev.brightness);
 		}
+		else if ( led != green_ledz )
+		{
+		brightness = led->cdev.brightness;
+		printk("RED %s%d\n", __func__, brightness);
+		if (led->cdev.brightness)
+			led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1,
+				led->cdev.brightness);
+		rc = pm8xxx_pwm_lut_enable(led->pwm_dev, led->cdev.brightness);
+		if (!led->cdev.brightness)
+			led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1,
+				led->cdev.brightness);
+		}
+#else
+        if (led->cdev.brightness)
+                led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1,
+                    led->cdev.brightness);
+	    rc = pm8xxx_pwm_lut_enable(led->pwm_dev, led->cdev.brightness);
+	    if (!led->cdev.brightness)
+	                led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1,
+	                     led->cdev.brightness);
 
-		rc = pm8xxx_pwm_lut_enable(led->pwm_dev, level);
-		if (!level)
-			led_rgb_write(led, SSBI_REG_ADDR_RGB_CNTL1, level);
+
+#endif
 	}
 
 	return rc;
@@ -605,11 +718,16 @@ static void __pm8xxx_led_work(struct pm8xxx_led_data *led,
 
 static void pm8xxx_led_work(struct work_struct *work)
 {
+#ifdef CONFIG_MACH_MSM8960_VU2
+	int rc = 0 ;
+#else
 	int rc;
-
+#endif
 	struct pm8xxx_led_data *led = container_of(work,
 					 struct pm8xxx_led_data, work);
-
+#ifdef CONFIG_MACH_MSM8960_VU2
+	int bright = 0 ;
+#endif
 	dev_dbg(led->cdev.dev, "led %s set %d (%s mode)\n",
 			led->cdev.name, led->cdev.brightness,
 			(led->pwm_dev ? "pwm" : "manual"));
@@ -617,11 +735,69 @@ static void pm8xxx_led_work(struct work_struct *work)
 	if (led->pwm_dev == NULL) {
 		__pm8xxx_led_work(led, led->cdev.brightness);
 	} else {
-		rc = pm8xxx_led_pwm_work(led);
+#ifdef CONFIG_MACH_MSM8960_VU2
+			if (  led == green_ledz )
+			{
+				bright = led->cdev.brightness;
+				printk("GREEN%s%d\n", __func__, bright);
+				if ( ( blue_status == 0 ) && ( ( led->cdev.brightness == 255 ) || ( led->cdev.brightness == 0 ) ) )
+					rc = pm8xxx_led_pwm_work(led);
+			}
+			else if ( led != green_ledz )
+			{
+				bright = led->cdev.brightness;
+				printk("RED%s%d\n", __func__, bright);
+				if ( ( led->cdev.brightness == 255 ) || ( led->cdev.brightness == 0 ) )
+					rc = pm8xxx_led_pwm_work(led);
+			}
+#else
+				rc = pm8xxx_led_pwm_work(led);
+#endif
 		if (rc)
 			pr_err("could not configure PWM mode for LED:%d\n",
 								led->id);
 	}
+}
+
+/* LGE_CHANGE_S
+* 2012-10-31, yuntaek.kim@lge.com
+* Indicator Led CP Control Code
+*/
+#if defined(CONFIG_MACH_MSM8960_L1v)
+/*Function for indicator led status store to SHMEM.*/
+static void led_lc_indicator_set(struct pm8xxx_led_data *led, enum kernel_led_status_type value)
+{
+	/*variable for Led status value*/
+	unsigned int  led_status_indicator = 0;
+	unsigned int *pled_status_indicator=0;
+
+	/*variables for charging status*/
+
+	mutex_lock(&led->lock);
+
+	/*allocation the LED Shared memory address*/
+	pled_status_indicator  = smem_alloc2(SMEM_BIO_LED_BUF, sizeof(pled_status_indicator));
+	if ( pled_status_indicator == NULL){
+		printk("LED indicator SHMEM allocation failed! \n");
+		return ;
+	}
+
+	switch(value){
+	/*LED ON with Notification*/
+	case NOTI_LED_SET_BLINKING:
+		led_status_indicator = NOTI_LED_SET_BLINKING;
+		break;
+	case NOTI_LED_OFF:
+		led_status_indicator = NOTI_LED_OFF; 
+		break;
+	case NOTI_LED_ON:
+		led_status_indicator = NOTI_LED_ON;
+	}	
+
+	/*store LED status to SHMEM*/
+	*pled_status_indicator = led_status_indicator;
+
+	mutex_unlock(&led->lock);
 }
 
 static void pm8xxx_led_set(struct led_classdev *led_cdev,
@@ -636,13 +812,83 @@ static void pm8xxx_led_set(struct led_classdev *led_cdev,
 		return;
 	}
 
+	led->cdev.brightness = value;
+	
+	/* pwr-led set*/
+	if(led->id == PM8XXX_ID_LED_0){
+		/*check led operation mode noti_none*/
+		if(led_operation_mode == START_MODE)
+		{
+			/*check led notification */
+			if(led->cdev.brightness == NOTI_LED_SET_BLINKING)
+			{
+				/*change led operation mode to notification mode */
+				led_operation_mode = WITH_NOTI_MODE;
+			}
+		}
+		/*check led operation mode noti_on*/
+		else if(led_operation_mode == WITH_NOTI_MODE)
+		{
+			/*check led notification */
+			if( !(led->cdev.brightness == NOTI_LED_SET_BLINKING) )
+			{
+				if( led->cdev.brightness == NOTI_LED_OFF)
+				{
+					led_lc_indicator_set(led, NOTI_LED_OFF);
+				}
+				else if( led->cdev.brightness == NOTI_LED_ON)
+				{
+					led_lc_indicator_set(led, NOTI_LED_ON);
+				}
+				led_operation_mode = START_MODE;				
+			}				
+		}
+		printk("Indicator LED : op_mode : %d , brightness : %d,  \n",  
+			led_operation_mode, led->cdev.brightness);	
+		
+		switch(led_operation_mode) {
+		case START_MODE:
+			led_lc_set(led,led->cdev.brightness);
+			break;
+		case WITH_NOTI_MODE:
+			led_lc_indicator_set(led,led->cdev.brightness);
+			break;
+		default : 
+			break;
+		}
+	}	
+	/* button_led set */
+	else{	
+		schedule_work(&led->work);
+	}
+}
+#else
+/* LGE_CHANGE_E
+* 2012-10-31, yuntaek.kim@lge.com
+* Indicator Led CP Control Code
+*/
+
+static void pm8xxx_led_set(struct led_classdev *led_cdev,
+	enum led_brightness value)
+{
+	struct	pm8xxx_led_data *led;
+
+	led = container_of(led_cdev, struct pm8xxx_led_data, cdev);
+
+	if (value < LED_OFF || value > led->cdev.max_brightness) {
+		dev_err(led->cdev.dev, "Invalid brightness value exceeds");
+		return;
+	}
+
 	if (!led->lock_update) {
+
 		schedule_work(&led->work);
 	} else {
 		dev_dbg(led->cdev.dev, "set %d pending\n",
 				value);
 	}
 }
+#endif
 
 static int pm8xxx_set_led_mode_and_adjust_brightness(struct pm8xxx_led_data *led,
 		enum pm8xxx_led_modes led_mode, int max_current)
@@ -966,6 +1212,38 @@ static int __devinit get_init_value(struct pm8xxx_led_data *led, u8 *val)
 	return rc;
 }
 
+/* LGE_CHANGE_S [dongju99.kim@lge.com] 2012-08-30 */
+#ifdef CONFIG_MACH_MSM8960_VU2
+void blue_led_nofi (int blue_level )
+{
+
+	if ( blue_level == NOTIFY_OFF )
+	{
+				 if ( green_ledz->cdev.brightness == 0 )
+				{
+				 printk("%s%d\n", __func__, blue_level);
+				 pm8xxx_pwm_lut_enable( green_ledz->pwm_dev, 0 );
+				 pm8xxx_pwm_lut_config( green_ledz->pwm_dev, green_ledz->pwm_period_us,
+				 green_ledz->pwm_duty_cycles->duty_pcts0,
+                 green_ledz->pwm_duty_cycles->duty_ms,
+                 0, idx0, 0, 0,
+	             PM8XXX_LED_PWM_FLAGS );
+				}
+	}
+	else if ( blue_level ==  NOTIFY_ON )
+	{
+				 printk("%s%d\n", __func__, blue_level);
+				 pm8xxx_pwm_lut_enable( green_ledz->pwm_dev, 0 );
+				 pm8xxx_pwm_lut_config( green_ledz->pwm_dev, green_ledz->pwm_period_us,
+                 green_ledz->pwm_duty_cycles->duty_pcts1,
+                 green_ledz->pwm_duty_cycles->duty_ms,
+                 0, idx1, 0, 0,
+	             PM8XXX_LED_PWM_FLAGS );
+				 pm8xxx_pwm_lut_enable( green_ledz->pwm_dev, 1 );
+	}
+
+}
+#endif
 static int pm8xxx_led_pwm_configure(struct pm8xxx_led_data *led)
 {
 	int duty_us, rc;
@@ -973,6 +1251,11 @@ static int pm8xxx_led_pwm_configure(struct pm8xxx_led_data *led)
 	led->pwm_dev = pwm_request(led->pwm_channel,
 					led->cdev.name);
 
+#ifdef CONFIG_MACH_MSM8960_VU2
+	if ( led->pwm_channel ==  GREEN_CHANNEL )
+		green_ledz = led ;
+#endif					
+					
 	if (IS_ERR_OR_NULL(led->pwm_dev)) {
 		pr_err("could not acquire PWM Channel %d, "
 			"error %ld\n", led->pwm_channel,
@@ -983,6 +1266,7 @@ static int pm8xxx_led_pwm_configure(struct pm8xxx_led_data *led)
 
 	if (led->pwm_duty_cycles != NULL) {
 		rc = pm8xxx_led_pwm_pattern_update(led);
+
 	} else {
 		duty_us = led->pwm_period_us;
 		rc = pwm_config(led->pwm_dev, duty_us, led->pwm_period_us);
@@ -1169,7 +1453,9 @@ static ssize_t pm8xxx_led_blink_store(struct device *dev,
 			if (leds[i].blink != state) {
 				leds[i].blink = state;
 				if(!leds[i].lock_update)
+
 					rc = pm8xxx_led_pwm_pattern_update(&leds[i]);
+
 			}
 		}
 	}

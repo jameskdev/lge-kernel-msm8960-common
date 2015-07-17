@@ -46,6 +46,22 @@
 #define MODE_CMD		41
 #define RESET_ID		2
 
+
+#ifdef CONFIG_LGE_MTS
+#include "mtsk_tty.h"
+#endif /* CONFIG_LGE_MTS */
+#ifdef CONFIG_LGE_MTS_CHAR
+#include "mtschar.h"
+#endif /* CONFIG_LGE_MTS_CHAR */
+
+#ifdef CONFIG_LGE_DM_DEV
+#include "lg_dm_dev_tty.h"
+#endif /*CONFIG_LGE_DM_DEV*/
+
+#ifdef CONFIG_LGE_DM_APP
+#include "lg_dm_tty.h"
+#endif
+
 int diag_debug_buf_idx;
 unsigned char diag_debug_buf[1024];
 /* Number of entries in table of buffers */
@@ -234,6 +250,11 @@ void chk_logging_wakeup(void)
 		}
 	}
 }
+
+//yckim.kim@lge.com 2012.05.23 :
+#ifdef CONFIG_LGE_DIAG_USB_ACCESS_LOCK
+extern int user_diag_enable;
+#endif
 
 void process_lock_enabling(struct diag_nrt_wake_lock *lock, int real_time)
 {
@@ -578,6 +599,9 @@ int diag_device_write(void *buf, int data_type, struct diag_request *write_ptr)
 						driver->write_ptr_svc);
 			} else
 				err = -1;
+#ifdef CONFIG_LGE_MTS
+		} else if(0 == mtsk_tty_process(buf, &(write_ptr->length), data_type)) {
+#endif
 		} else if ((data_type >= 0) &&
 				(data_type < NUM_SMD_DATA_CHANNELS)) {
 			write_ptr->buf = buf;
@@ -647,6 +671,61 @@ int diag_device_write(void *buf, int data_type, struct diag_request *write_ptr)
 		APPEND_DEBUG('d');
 	}
 #endif /* DIAG OVER USB */
+
+#ifdef CONFIG_LGE_DM_APP
+	if (driver->logging_mode == DM_APP_MODE) {
+		/* only diag cmd #250 for supporting testmode tool */
+		if (data_type == APPS_DATA) {
+			driver->write_ptr_svc = (struct diag_request *)
+			(diagmem_alloc(driver, sizeof(struct diag_request),
+				 POOL_TYPE_WRITE_STRUCT));
+			if (driver->write_ptr_svc) {
+				driver->write_ptr_svc->length = driver->used;
+				driver->write_ptr_svc->buf = buf;
+
+				queue_work(lge_dm_tty->dm_wq,
+					&(lge_dm_tty->dm_usb_work));
+				flush_work(&(lge_dm_tty->dm_usb_work));
+
+			} else {
+				err = -1;
+			}
+
+			return err;
+
+		}
+
+		lge_dm_tty->set_logging = 1;
+		wake_up_interruptible(&lge_dm_tty->waitq);
+
+	}
+#endif
+
+#ifdef CONFIG_LGE_DM_DEV
+		if (driver->logging_mode == DM_DEV_MODE) {
+			/* only diag cmd #250 for supporting testmode tool */
+			if (data_type == APPS_DATA) {
+				driver->write_ptr_svc = (struct diag_request *)
+				(diagmem_alloc(driver, sizeof(struct diag_request),
+					 POOL_TYPE_WRITE_STRUCT));
+				if (driver->write_ptr_svc) {
+					driver->write_ptr_svc->length = driver->used;
+					driver->write_ptr_svc->buf = buf;
+					queue_work(lge_dm_dev_tty->dm_dev_wq,
+						&(lge_dm_dev_tty->dm_dev_usb_work));
+					flush_work(&(lge_dm_dev_tty->dm_dev_usb_work));
+
+				} else {
+					err = -1;
+				}
+				return err;
+			}
+
+		lge_dm_dev_tty->set_logging = 1;
+		wake_up_interruptible(&lge_dm_dev_tty->waitq);
+
+	}
+#endif /*CONFIG_LGE_DM_DEV*/
     return err;
 }
 
@@ -1253,6 +1332,24 @@ void diag_process_hdlc(void *data, unsigned len)
 					   DUMP_PREFIX_ADDRESS, data, len, 1);
 		driver->debug_flag = 0;
 	}
+
+#ifdef CONFIG_LGE_DIAG_TABLE_UPDATE_TWICE
+//kyuhyung.lee 2012.12.10 - Sometimely control command is not registered in table
+//                          This error make bad response. In this case we have to register it again.                 
+    if( bLimitCount == 0 && type == 1 && mts_tty_cable_info() == 7)  // do it only calibration case(130K)
+    {
+        if (driver->ch_cntl){
+            //do it just one time
+            bLimitCount++;
+            diag_send_event_mask_update(driver->ch_cntl, 1 );
+            msleep(25);
+        }
+        type = diag_process_apps_pkt(driver->hdlc_buf,
+                              hdlc.dest_idx - 3);
+          
+    }
+#endif
+
 	/* send error responses from APPS for Central Routing */
 	if (type == 1 && chk_apps_only()) {
 		diag_send_error_rsp(hdlc.dest_idx);
@@ -1320,6 +1417,43 @@ int diagfwd_connect(void)
 	int err;
 	int i;
 
+#ifdef CONFIG_LGE_MTS_CHAR
+	wake_up_interruptible(&mtschar->waitq);
+#endif /* CONFIG_LGE_MTS_CHAR */
+
+#ifdef CONFIG_LGE_DM_DEV
+	if (driver->logging_mode == DM_DEV_MODE) {
+		driver->usb_connected = 1;
+
+		err = usb_diag_alloc_req(driver->legacy_ch, N_LEGACY_WRITE,
+				N_LEGACY_READ);
+		if (err)
+			printk(KERN_ERR "diag: unable to alloc USB req on legacy ch");
+
+		/* Poll USB channel to check for data*/
+		queue_work(driver->diag_wq, &(driver->diag_read_work));
+
+		return 0;
+	}
+#endif /*CONFIG_LGE_DM_DEV*/
+
+#ifdef CONFIG_LGE_DM_APP
+	if (driver->logging_mode == DM_APP_MODE) {
+		printk(KERN_DEBUG "diag: USB connected in DM_APP_MODE\n");
+		driver->usb_connected = 1;
+
+		err = usb_diag_alloc_req(driver->legacy_ch, N_LEGACY_WRITE,
+				N_LEGACY_READ);
+		if (err)
+			printk(KERN_ERR "diag: unable to alloc USB req on legacy ch");
+
+		/* Poll USB channel to check for data*/
+		queue_work(driver->diag_wq, &(driver->diag_read_work));
+
+		return 0;
+	}
+#endif
+
 	printk(KERN_DEBUG "diag: USB connected\n");
 	err = usb_diag_alloc_req(driver->legacy_ch, N_LEGACY_WRITE,
 			N_LEGACY_READ);
@@ -1353,6 +1487,31 @@ int diagfwd_connect(void)
 int diagfwd_disconnect(void)
 {
 	int i;
+
+#ifdef CONFIG_LGE_MTS_CHAR
+	wake_up_interruptible(&mtschar->waitq);
+#endif /* CONFIG_LGE_MTS_CHAR */
+
+#ifdef CONFIG_LGE_DM_DEV
+	if (driver->logging_mode == DM_DEV_MODE) {
+		driver->usb_connected = 0;
+
+		usb_diag_free_req(driver->legacy_ch);
+
+		return 0;
+	}
+#endif /*CONFIG_LGE_DM_DEV*/
+
+#ifdef CONFIG_LGE_DM_APP
+	if (driver->logging_mode == DM_APP_MODE) {
+		printk(KERN_DEBUG "diag: USB disconnected in DM_APP_MODE\n");
+		driver->usb_connected = 0;
+
+		usb_diag_free_req(driver->legacy_ch);
+
+		return 0;
+	}
+#endif
 
 	printk(KERN_DEBUG "diag: USB disconnected\n");
 	driver->usb_connected = 0;
@@ -1442,6 +1601,29 @@ int diagfwd_read_complete(struct diag_request *diag_read_ptr)
 				queue_work(driver->diag_wq,
 						 &(driver->diag_read_work));
 		}
+#ifdef CONFIG_LGE_DM_DEV
+		if (driver->logging_mode == DM_DEV_MODE) {
+			if (status != -ECONNRESET && status != -ESHUTDOWN)
+
+				queue_work(driver->diag_wq,
+					&(driver->diag_proc_hdlc_work));
+			else
+				queue_work(driver->diag_wq,
+						 &(driver->diag_read_work));
+		}
+#endif /*CONFIG_LGE_DM_DEV*/
+
+#ifdef CONFIG_LGE_DM_APP
+		if (driver->logging_mode == DM_APP_MODE) {
+			if (status != -ECONNRESET && status != -ESHUTDOWN)
+				queue_work(driver->diag_wq,
+					&(driver->diag_proc_hdlc_work));
+			else
+				queue_work(driver->diag_wq,
+						 &(driver->diag_read_work));
+		}
+#endif
+
 	}
 #ifdef CONFIG_DIAG_SDIO_PIPE
 	else if (buf == (void *)driver->usb_buf_mdm_out) {

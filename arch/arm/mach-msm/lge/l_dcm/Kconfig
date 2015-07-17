@@ -1,0 +1,7 @@
+config MACH_MSM8960_L_DCM
+	depends on ARCH_MSM8960
+	select MACH_LGE
+	bool "MSM8960_L_DCM"
+	help
+	  Support for the LGE MSM8960 L_DCM device.
+

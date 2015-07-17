@@ -444,10 +444,15 @@ overflow:
 		purged = 1;
 		goto retry;
 	}
-	if (printk_ratelimit())
+	if (printk_ratelimit()){
 		printk(KERN_WARNING
 			"vmap allocation for size %lu failed: "
 			"use vmalloc=<size> to increase size.\n", size);
+		printk(KERN_WARNING
+			"vmap allocation for vstart %lu vend %lu addr %lx failed: "
+			"\n", vstart,vend,addr);
+		WARN_ON(1);
+	}
 	kfree(va);
 	return ERR_PTR(-EBUSY);
 }

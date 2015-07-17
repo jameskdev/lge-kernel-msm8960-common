@@ -569,7 +569,10 @@ config TCP_CONG_ILLINOIS
 
 choice
 	prompt "Default TCP congestion control"
-	default DEFAULT_CUBIC
+	# LGE_CHANGE_S, [LGE_DATA][TCP_Congestion_Control_BIC], y01.jeong@lge.com, 2012-03-05
+	# default DEFAULT_CUBIC
+	default DEFAULT_BIC
+	# LGE_CHANGE_E, [LGE_DATA][TCP_Congestion_Control_BIC], y01.jeong@lge.com, 2012-03-05
 	help
 	  Select the TCP congestion control that will be used by default
 	  for all connections.

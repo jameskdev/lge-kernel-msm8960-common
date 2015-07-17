@@ -77,6 +77,7 @@ void clean_caches(unsigned long, unsigned long, unsigned long);
 void invalidate_caches(unsigned long, unsigned long, unsigned long);
 int msm_get_memory_type_from_name(const char *memtype_name);
 unsigned long get_ddr_size(void);
+unsigned long get_ddr_size(void);
 
 #if defined(CONFIG_ARCH_MSM_ARM11) || defined(CONFIG_ARCH_MSM_CORTEX_A5)
 void write_to_strongly_ordered_memory(void);

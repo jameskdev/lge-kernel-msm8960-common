@@ -989,6 +989,7 @@ config VCM
 
 config STRICT_MEMORY_RWX
 	bool "restrict kernel memory permissions as much as possible"
+	depends on FUNCTION_TRACER
 	default n
 	help
 	  If this is set, kernel text will be made RX, kernel data and stack

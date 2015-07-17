@@ -29,8 +29,18 @@
 #include <linux/dma-mapping.h>
 #include <linux/android_pmem.h>
 
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+#include <mach/msm_hdmi_audio.h>
+#endif
 #include "msm-pcm-q6.h"
 #include "msm-pcm-routing.h"
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+extern  int msm_hdmi_audio_enble_flag;
+int compressed_open_flag = 0;
+EXPORT_SYMBOL(compressed_open_flag);
+unsigned int compressed_open_format = 0;
+EXPORT_SYMBOL(compressed_open_format);
+#endif
 
 static struct audio_locks the_locks;
 
@@ -252,8 +262,15 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	if (prtd->enabled)
 		return 0;
 
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+       ret = 0;
+	if (!compressed_open_flag) {
+#endif
 	ret = q6asm_media_format_block_pcm(prtd->audio_client, runtime->rate,
 				runtime->channels);
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+	}
+#endif
 	if (ret < 0)
 		pr_info("%s: CMD Format block failed\n", __func__);
 
@@ -364,6 +381,11 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	prtd->audio_client->perf_mode = false;
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		runtime->hw = msm_pcm_hardware_playback;
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+		if (!hdmi_msm_audio_is_enabled()) {
+			compressed_open_flag = 0;
+			pr_debug("AMAS: %s , compressflag:%d\n", __func__,  compressed_open_flag);
+#endif
 		ret = q6asm_open_write(prtd->audio_client, FORMAT_LINEAR_PCM);
 		if (ret < 0) {
 			pr_err("%s: pcm out open failed\n", __func__);
@@ -379,8 +401,34 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 			prtd->audio_client->perf_mode,
 			prtd->session_id, substream->stream);
 		prtd->cmd_ack = 1;
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+		}
+		else {
+			compressed_open_flag = 1;
+			pr_debug("AMAS: %s , compressflag:%d\n", __func__,  compressed_open_flag);
 
+			ret = q6asm_open_write_compressed(prtd->audio_client, compressed_open_format + 0x12);
+			if (ret < 0) {
+				pr_debug("%s: compressed out open failed\n", __func__);
+				q6asm_audio_client_free(prtd->audio_client);
+				kfree(prtd);
+				return -ENOMEM;
+			}
+			pr_debug("%s: Compressed Mode:session ID %d\n", __func__,
+				prtd->audio_client->session);
+			prtd->session_id = prtd->audio_client->session;
+			prtd->cmd_ack = 1;
+		}
+#endif
 	}
+	/* Capture path */
+	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+		compressed_open_flag=0;
+#endif
+		runtime->hw = msm_pcm_hardware_capture;
+	}
+
 	/* Capture path */
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		runtime->hw = msm_pcm_hardware_capture;
@@ -444,6 +492,14 @@ static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 		return 0;
 	}
 
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+ 	pr_debug("%s: compress:%d, msm_hdmi_audio_enable_flag:%d\n", __func__, compressed_open_flag, msm_hdmi_audio_enble_flag);
+	if (compressed_open_flag && !msm_hdmi_audio_enble_flag) {
+		//hdmi_connected_flag=0;	//reset flag
+		pr_err("%s: oops hdmi audio disabled\n", __func__);
+		return -EIO;
+	}
+#endif
 	data = q6asm_is_cpu_buf_avail(IN, prtd->audio_client, &size, &idx);
 	bufptr = data;
 	if (bufptr) {
@@ -485,16 +541,31 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	pr_debug("%s\n", __func__);
 
 	dir = IN;
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+	if (compressed_open_flag && !msm_hdmi_audio_enble_flag) {
+		ret = wait_event_timeout(the_locks.eos_wait, prtd->cmd_ack, 0.5*HZ);
+	}
+	else {
+#endif
 	ret = wait_event_timeout(the_locks.eos_wait,
 				prtd->cmd_ack, 5 * HZ);
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+	}
+#endif
 	if (!ret)
 		pr_err("%s: CMD_EOS failed\n", __func__);
 	q6asm_cmd(prtd->audio_client, CMD_CLOSE);
 	q6asm_audio_client_buf_free_contiguous(dir,
 				prtd->audio_client);
 
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+	if (!compressed_open_flag) {
+#endif
 	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->be_id,
 			SNDRV_PCM_STREAM_PLAYBACK);
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+	}
+#endif
 	q6asm_audio_client_free(prtd->audio_client);
 	kfree(prtd);
 	return 0;
@@ -616,6 +687,9 @@ static int msm_pcm_close(struct snd_pcm_substream *substream)
 		ret = msm_pcm_playback_close(substream);
 	else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
 		ret = msm_pcm_capture_close(substream);
+#ifdef CONFIG_LGE_COMPRESSED_PATH
+	compressed_open_flag = 0;
+#endif	
 	return ret;
 }
 static int msm_pcm_prepare(struct snd_pcm_substream *substream)
@@ -706,7 +780,7 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 						  prtd->audio_client->perf_mode,
 						  prtd->session_id,
 						  substream->stream, event);
-	}
+		}
 
 	if (dir == OUT) {
 		ret = q6asm_audio_client_buf_alloc_contiguous(dir,

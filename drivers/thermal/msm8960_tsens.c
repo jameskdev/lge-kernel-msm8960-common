@@ -24,10 +24,20 @@
 #include <linux/msm_tsens.h>
 #include <linux/io.h>
 #include <linux/err.h>
+#ifdef CONFIG_DEBUG_FS
+#include <linux/debugfs.h>
+#include <linux/uaccess.h>
+#endif
 #include <linux/pm.h>
 
 #include <mach/msm_iomap.h>
 #include <mach/socinfo.h>
+
+#ifdef CONFIG_LGE_THERMAL_NOTIFICATION
+/* mansu.lee@lge.com Implements thermal notify sequence by sysfs uevent */
+#include <linux/miscdevice.h>
+/* mansu.lee@lge.com */
+#endif
 
 /* Trips: from very hot to very cold */
 enum tsens_trip_type {
@@ -141,6 +151,25 @@ enum tsens_trip_type {
 
 static int tsens_status_cntl_start;
 
+#ifdef CONFIG_LGE_THERMAL_NOTIFICATION
+/* mansu.lee@lge.com Implements thermal notify sequence by sysfs uevent */
+/* uevent string buffer */
+static char lge_tm_event[32];
+static char *envp_state[2] = {lge_tm_event, NULL};
+
+/* add misc device */
+static const struct file_operations lge_thermal_fops = {
+	.owner = THIS_MODULE,
+};
+
+static struct miscdevice lge_thermal_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "lge_thermal",
+	.fops = &lge_thermal_fops,
+};
+/* mansu.lee@lge.com */
+#endif
+
 struct tsens_tm_device_sensor {
 	struct thermal_zone_device	*tz_dev;
 	enum thermal_device_mode	mode;
@@ -164,6 +193,198 @@ struct tsens_tm_device {
 };
 
 struct tsens_tm_device *tmdev;
+#if defined(CONFIG_MACH_LGE) && defined(CONFIG_DEBUG_FS)
+struct dentry *msm8960_tsens_debugfs_root;
+unsigned long debug_temp[5];
+
+ssize_t debug_temp_show(struct file *file, char __user *buf, size_t cnt,
+							loff_t *ppos)
+{
+	int i;
+
+	for (i = 0; i < tmdev->tsens_num_sensor; i++) {
+		pr_info("tsens_tz_sensor%d debug temperature: %lu\n", i,
+			debug_temp[i]);
+	}
+
+	return 0;
+}
+
+ssize_t debug_tsens0_temp_store(struct file *file, const char __user *buf,
+							size_t cnt, loff_t *ppos)
+{
+	char temp[3];
+
+	if (copy_from_user((void *)temp, buf, 3)) {
+		pr_err("Unable to copy data from user space\n");
+		return -EFAULT;
+	}
+	if (sscanf(temp, "%lu", &debug_temp[0]) != 1) {
+		pr_err("invalid argument\n");
+		return -EINVAL;
+	}
+
+	pr_info("Set tsens_tz_sensor0 temperature to %lu\n", debug_temp[0]);
+
+	/* Notify user space */
+	schedule_work(&tmdev->sensor[0].work);
+
+	return cnt;
+}
+
+ssize_t debug_tsens1_temp_store(struct file *file, const char __user *buf,
+							size_t cnt, loff_t *ppos)
+{
+	char temp[3];
+
+	if (copy_from_user((void *)temp, buf, 3)) {
+		pr_err("Unable to copy data from user space\n");
+		return -EFAULT;
+	}
+	if (sscanf(temp, "%lu", &debug_temp[1]) != 1) {
+		pr_err("invalid argument\n");
+		return -EINVAL;
+	}
+
+	pr_info("Set tsens_tz_sensor1 temperature to %lu\n", debug_temp[1]);
+
+	/* Notify user space */
+	schedule_work(&tmdev->sensor[1].work);
+
+	return cnt;
+}
+
+ssize_t debug_tsens2_temp_store(struct file *file, const char __user *buf,
+							size_t cnt, loff_t *ppos)
+{
+	char temp[3];
+
+	if (copy_from_user((void *)temp, buf, 3)) {
+		pr_err("Unable to copy data from user space\n");
+		return -EFAULT;
+	}
+	if (sscanf(temp, "%lu", &debug_temp[2]) != 1) {
+		pr_err("invalid argument\n");
+		return -EINVAL;
+	}
+
+	pr_info("Set tsens_tz_sensor2 temperature to %lu\n", debug_temp[2]);
+
+	/* Notify user space */
+	schedule_work(&tmdev->sensor[2].work);
+
+	return cnt;
+}
+
+ssize_t debug_tsens3_temp_store(struct file *file, const char __user *buf,
+							size_t cnt, loff_t *ppos)
+{
+	char temp[3];
+
+	if (copy_from_user((void *)temp, buf, 3)) {
+		pr_err("Unable to copy data from user space\n");
+		return -EFAULT;
+	}
+	if (sscanf(temp, "%lu", &debug_temp[3]) != 1) {
+		pr_err("invalid argument\n");
+		return -EINVAL;
+	}
+
+	pr_info("Set tsens_tz_sensor3 temperature to %lu\n", debug_temp[3]);
+
+	/* Notify user space */
+	schedule_work(&tmdev->sensor[3].work);
+
+	return cnt;
+}
+
+ssize_t debug_tsens4_temp_store(struct file *file, const char __user *buf,
+							size_t cnt, loff_t *ppos)
+{
+	char temp[3];
+
+	if (copy_from_user((void *)temp, buf, 3)) {
+		pr_err("Unable to copy data from user space\n");
+		return -EFAULT;
+	}
+	if (sscanf(temp, "%lu", &debug_temp[4]) != 1) {
+		pr_err("invalid argument\n");
+		return -EINVAL;
+	}
+
+	pr_info("Set tsens_tz_sensor4 temperature to %lu\n", debug_temp[4]);
+
+	/* Notify user space */
+	schedule_work(&tmdev->sensor[4].work);
+
+	return cnt;
+}
+
+static const struct file_operations msm8960_tsens0_temp_fops = {
+	.read = debug_temp_show,
+	.write = debug_tsens0_temp_store,
+};
+
+static const struct file_operations msm8960_tsens1_temp_fops = {
+	.read = debug_temp_show,
+	.write = debug_tsens1_temp_store,
+};
+
+static const struct file_operations msm8960_tsens2_temp_fops = {
+	.read = debug_temp_show,
+	.write = debug_tsens2_temp_store,
+};
+
+static const struct file_operations msm8960_tsens3_temp_fops = {
+	.read = debug_temp_show,
+	.write = debug_tsens3_temp_store,
+};
+
+static const struct file_operations msm8960_tsens4_temp_fops = {
+	.read = debug_temp_show,
+	.write = debug_tsens4_temp_store,
+};
+#endif
+
+#ifdef CONFIG_LGE_THERMAL_NOTIFICATION
+/* mansu.lee@lge.com Implements thermal notify sequence by sysfs uevent */
+/* sysfs attribute */
+static ssize_t lge_thermal_noti_xotherm_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	printk(KERN_INFO "%s : xotherm = %s\n", __func__, buf);
+	sprintf(lge_tm_event, "LGE_TM_XOTHM=%s\n", buf);
+	kobject_uevent_env(&lge_thermal_device.this_device->kobj,
+					KOBJ_CHANGE, envp_state);
+	return count;
+}
+
+static ssize_t lge_thermal_noti_lcdrestore_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	printk(KERN_INFO "%s : lcdrestore = %s\n", __func__, buf);
+	sprintf(lge_tm_event, "LGE_TM_LCDBR=%s\n", buf);
+	kobject_uevent_env(&lge_thermal_device.this_device->kobj,
+					KOBJ_CHANGE, envp_state);
+	return count;
+}
+
+static ssize_t lge_thermal_noti_shutdown_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+
+	printk(KERN_INFO "%s : shutdown = %s\n", __func__, buf);
+	sprintf(lge_tm_event, "LGE_TM_SHUTD=%s\n", buf);
+	kobject_uevent_env(&lge_thermal_device.this_device->kobj,
+					KOBJ_CHANGE, envp_state);
+	return count;
+}
+
+static DEVICE_ATTR(lge_thermal_xotherm, 0664, NULL, lge_thermal_noti_xotherm_store);
+static DEVICE_ATTR(lge_thermal_lcdbr, 0664, NULL, lge_thermal_noti_lcdrestore_store);
+static DEVICE_ATTR(lge_thermal_shutdown, 0664, NULL, lge_thermal_noti_shutdown_store);
+/* mansu.lee@lge.com */
+#endif
 
 /* Temperature on y axis and ADC-code on x-axis */
 static int tsens_tz_code_to_degC(int adc_code, int sensor_num)
@@ -201,6 +422,12 @@ static int tsens_tz_degC_to_code(int degC, int sensor_num)
 static void tsens8960_get_temp(int sensor_num, unsigned long *temp)
 {
 	unsigned int code, offset = 0, sensor_addr;
+#if defined(CONFIG_MACH_LGE) && defined(CONFIG_DEBUG_FS)
+	if (debug_temp[sensor_num] != 0) {
+		*temp = debug_temp[sensor_num];
+		return;
+	}
+#endif
 
 	if (!tmdev->prev_reading_avail) {
 		while (!(readl_relaxed(TSENS_INT_STATUS_ADDR)
@@ -272,6 +499,9 @@ static int tsens_tz_set_mode(struct thermal_zone_device *thermal,
 		return -EINVAL;
 
 	if (mode != tm_sensor->mode) {
+		pr_info("%s: mode: %d --> %d\n", __func__, tm_sensor->mode,
+									 mode);
+
 		reg = readl_relaxed(TSENS_CNTL_ADDR);
 
 		mask = 1 << (tm_sensor->sensor_num + TSENS_SENSOR0_SHIFT);
@@ -971,7 +1201,35 @@ static int __devinit tsens_tm_probe(struct platform_device *pdev)
 		pr_info("%s : TSENS early init not done.\n", __func__);
 		return -EFAULT;
 	}
+#if defined(CONFIG_MACH_LGE) && defined(CONFIG_DEBUG_FS)
+	memset(debug_temp, 0x0, sizeof(debug_temp));
 
+	msm8960_tsens_debugfs_root = debugfs_create_dir("msm8960_tsens", NULL);
+	if (IS_ERR(msm8960_tsens_debugfs_root) || !msm8960_tsens_debugfs_root) {
+		pr_err("MSM8960 TSENS: Failed to create debugfs directory\n");
+		msm8960_tsens_debugfs_root = NULL;
+	}
+
+	if (!debugfs_create_file("tsens_tz_sensor0", 0644,
+		msm8960_tsens_debugfs_root, NULL, &msm8960_tsens0_temp_fops))
+		pr_err("MSM8960 TSENS: Failed to create msm8960_tsens0_temp debugfs file\n");
+
+	if (!debugfs_create_file("tsens_tz_sensor1", 0644,
+		msm8960_tsens_debugfs_root, NULL, &msm8960_tsens1_temp_fops))
+		pr_err("MSM8960 TSENS: Failed to create msm8960_tsens0_temp debugfs file\n");
+
+	if (!debugfs_create_file("tsens_tz_sensor2", 0644,
+		msm8960_tsens_debugfs_root, NULL, &msm8960_tsens2_temp_fops))
+		pr_err("MSM8960 TSENS: Failed to create msm8960_tsens0_temp debugfs file\n");
+
+	if (!debugfs_create_file("tsens_tz_sensor3", 0644,
+		msm8960_tsens_debugfs_root, NULL, &msm8960_tsens3_temp_fops))
+		pr_err("MSM8960 TSENS: Failed to create msm8960_tsens0_temp debugfs file\n");
+
+	if (!debugfs_create_file("tsens_tz_sensor4", 0644,
+		msm8960_tsens_debugfs_root, NULL, &msm8960_tsens4_temp_fops))
+		pr_err("MSM8960 TSENS: Failed to create msm8960_tsens0_temp debugfs file\n");
+#endif
 	for (i = 0; i < tmdev->tsens_num_sensor; i++) {
 		char name[18];
 		snprintf(name, sizeof(name), "tsens_tz_sensor%d", i);
@@ -987,7 +1245,32 @@ static int __devinit tsens_tm_probe(struct platform_device *pdev)
 			goto fail;
 		}
 	}
+#ifdef CONFIG_LGE_THERMAL_NOTIFICATION
+/* mansu.lee@lge.com Implements thermal notify sequence by sysfs uevent */
+	/* create thermal notify sysfs */
+	rc = device_create_file(&pdev->dev, &dev_attr_lge_thermal_xotherm);
+	if (rc)
+		dev_err(&pdev->dev, "failed to create sysfs entry:"
+			"(dev_attr_perf) error: %d\n", rc);
 
+	rc = device_create_file(&pdev->dev, &dev_attr_lge_thermal_lcdbr);
+	if (rc)
+		dev_err(&pdev->dev, "failed to create sysfs entry:"
+			"(dev_attr_perf) error: %d\n", rc);
+
+	rc = device_create_file(&pdev->dev, &dev_attr_lge_thermal_shutdown);
+	if (rc)
+		dev_err(&pdev->dev, "failed to create sysfs entry:"
+			"(dev_attr_perf) error: %d\n", rc);
+
+	/* if fsg common object is cdrom, register autorun misc device */
+	rc = misc_register(&lge_thermal_device);
+	if (rc) {
+		printk(KERN_ERR "lge thermal notify driver failed to initialize\n");
+		goto fail;
+	}
+/* mansu.lee@lge.com */
+#endif
 	rc = request_irq(TSENS_UPPER_LOWER_INT, tsens_isr,
 		IRQF_TRIGGER_RISING, "tsens_interrupt", tmdev);
 	if (rc < 0) {
@@ -1013,11 +1296,22 @@ static int __devexit tsens_tm_remove(struct platform_device *pdev)
 {
 	int i;
 
+#if defined(CONFIG_MACH_LGE) && defined(CONFIG_DEBUG_FS)
+	debugfs_remove_recursive(msm8960_tsens_debugfs_root);
+#endif
 	tsens_disable_mode();
 	mb();
 	free_irq(TSENS_UPPER_LOWER_INT, tmdev);
 	for (i = 0; i < tmdev->tsens_num_sensor; i++)
 		thermal_zone_device_unregister(tmdev->sensor[i].tz_dev);
+#ifdef CONFIG_LGE_THERMAL_NOTIFICATION
+/* mansu.lee@lge.com Implements thermal notify sequence by sysfs uevent */
+	/* remove thermal notify sysfs */
+	device_remove_file(&pdev->dev, &dev_attr_lge_thermal_xotherm);
+	device_remove_file(&pdev->dev, &dev_attr_lge_thermal_lcdbr);
+	device_remove_file(&pdev->dev, &dev_attr_lge_thermal_shutdown);
+/* mansu.lee@lge.com */
+#endif
 	kfree(tmdev);
 	tmdev = NULL;
 	return 0;

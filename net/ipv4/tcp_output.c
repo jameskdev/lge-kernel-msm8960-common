@@ -127,7 +127,12 @@ static __u16 tcp_advertise_mss(struct sock *sk)
 			tp->advmss = mss;
 		}
 	}
-
+// LGE_DATA_CHANGE_S, [120810_US_ATT_0024], http://dev.lge.com/wiki/datacop/patch_0024
+#if defined(LGE_ATT) || defined(LGE_TRACFONE)
+	mss = 1370;
+	tp->advmss = mss;
+#endif
+// LGE_DATA_CHANGE_E, [120810_US_ATT_0024], http://dev.lge.com/wiki/datacop/patch_0024
 	return (__u16)mss;
 }
 
@@ -228,6 +233,10 @@ void tcp_select_initial_window(int __space, __u32 mss,
 		}
 	}
 
+// LGE_DATA_CHANGE_S, [120820_US_ATT_0039], http://dev.lge.com/wiki/datacop/patch_0039
+#if defined(LGE_ATT) || defined(LGE_TRACFONE)
+		(*rcv_wnd) = space;
+#else
 	/* Set initial window to a value enough for senders starting with
 	 * initial congestion window of TCP_DEFAULT_INIT_RCVWND. Place
 	 * a limit on the initial window when mss is larger than 1460.
@@ -245,6 +254,8 @@ void tcp_select_initial_window(int __space, __u32 mss,
 		else
 			*rcv_wnd = min(*rcv_wnd, init_cwnd * mss);
 	}
+#endif
+// LGE_DATA_CHANGE_E, [120820_US_ATT_0039], http://dev.lge.com/wiki/datacop/patch_0039
 
 	/* Set the clamp no higher than max representable value */
 	(*window_clamp) = min(65535U << (*rcv_wscale), *window_clamp);

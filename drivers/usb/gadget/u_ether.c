@@ -862,7 +862,9 @@ static int eth_stop(struct net_device *net)
 		 * their own pace; the network stack can handle old packets.
 		 * For the moment we leave this here, since it works.
 		 */
+#ifndef CONFIG_USB_ANDROID_CDC_ECM
 		usb_ep_disable(link->in_ep);
+#endif
 		usb_ep_disable(link->out_ep);
 		if (netif_carrier_ok(net)) {
 			if (config_ep_by_speed(dev->gadget, &link->func,

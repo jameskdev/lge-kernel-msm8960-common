@@ -62,13 +62,36 @@ extern struct platform_device msm8960_device_uart_gsbi5;
 extern struct platform_device msm8960_device_uart_gsbi8;
 extern struct platform_device msm8930_device_uart_gsbi10;
 extern struct platform_device msm8930_device_uart_gsbi11;
+/* 20111205, chaeuk.lee@lge.com, Add IrDA UART [START] */
+#ifdef CONFIG_LGE_IRDA
+extern struct platform_device msm8960_device_irda_gsbi9;
+#endif
+/* 20111205, chaeuk.lee@lge.com, Add IrDA UART [END] */
+/* 20120704, sukkkong.kim@lge.com, Add IRRC UART [START] */
+#ifdef CONFIG_LGE_IRRC
+extern struct platform_device msm8960_device_uart_gsbi4;
+#endif
+/* 20120704, sukkkong.kim@lge.com, Add IRRC UART [END] */
 extern struct platform_device msm8960_device_ssbi_pmic;
 extern struct platform_device msm8960_device_qup_i2c_gsbi3;
 extern struct platform_device msm8960_device_qup_i2c_gsbi4;
 extern struct platform_device msm8960_device_qup_i2c_gsbi8;
 extern struct platform_device msm8960_device_qup_i2c_gsbi9;
+
+#if defined(CONFIG_LGE_BROADCAST_1SEG) || defined(CONFIG_LGE_BROADCAST_TDMB)
+extern struct platform_device msm8960_device_qup_spi_gsbi10;
+#else
 extern struct platform_device msm8960_device_qup_i2c_gsbi10;
+#endif /* CONFIG_LGE_BROADCAST */
 extern struct platform_device msm8960_device_qup_i2c_gsbi12;
+#ifdef CONFIG_MACH_LGE
+extern struct platform_device msm8960_device_qup_i2c_gsbi1;
+extern struct platform_device msm8960_device_qup_i2c_gsbi2;
+extern struct platform_device msm8960_device_qup_i2c_gsbi5;
+extern struct platform_device msm8960_device_qup_i2c_gsbi7;
+extern struct platform_device msm8960_device_qup_i2c_gsbi8;
+extern struct platform_device msm8960_device_qup_i2c_gsbi9;
+#endif
 extern struct platform_device msm8960_device_qup_spi_gsbi1;
 extern struct platform_device msm8960_gemini_device;
 extern struct platform_device msm8960_mercury_device;
@@ -465,6 +488,9 @@ extern struct platform_device msm9615_device_acpuclk;
 
 extern struct platform_device apq8064_msm_mpd_device;
 
+#ifdef CONFIG_FTT_CHARGER//hyunjun.park
+extern struct platform_device ftt_charger_device;
+#endif
 extern struct platform_device msm_gpio_device;
 
 extern struct platform_device amdm_8064_device;

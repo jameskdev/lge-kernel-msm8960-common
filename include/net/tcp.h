@@ -98,9 +98,13 @@ extern void tcp_time_wait(struct sock *sk, int state, int timeo);
 				 * 15 is ~13-30min depending on RTO.
 				 */
 
+//jk.soh 20120117, LG U+ TCP SYN retry interval
+#ifdef CONFIG_MACH_MSM8960_D1LU
+#define TCP_SYN_RETRIES	 4
+#else
 #define TCP_SYN_RETRIES	 5	/* number of times to retry active opening a
 				 * connection: ~180sec is RFC minimum	*/
-
+#endif
 #define TCP_SYNACK_RETRIES 5	/* number of times to retry passive opening a
 				 * connection: ~180sec is RFC minimum	*/
 
@@ -121,7 +125,13 @@ extern void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define TCP_DELACK_MIN	4U
 #define TCP_ATO_MIN	4U
 #endif
+// LGE_DATA_CHANGE_S, [120810_US_ATT_0025], http://dev.lge.com/wiki/datacop/patch_0025
+#if defined(LGE_ATT) || defined(LGE_TRACFONE)
+#define TCP_RTO_MAX	((unsigned)(3*HZ))
+#else
 #define TCP_RTO_MAX	((unsigned)(120*HZ))
+#endif
+// LGE_DATA_CHANGE_E, [120810_US_ATT_0025], http://dev.lge.com/wiki/datacop/patch_0025
 #define TCP_RTO_MIN	((unsigned)(HZ/5))
 #define TCP_TIMEOUT_INIT ((unsigned)(1*HZ))	/* RFC2988bis initial RTO value	*/
 #define TCP_TIMEOUT_FALLBACK ((unsigned)(3*HZ))	/* RFC 1122 initial RTO value, now
@@ -130,8 +140,6 @@ extern void tcp_time_wait(struct sock *sk, int state, int timeo);
 						 * valid RTT sample has been acquired,
 						 * most likely due to retrans in 3WHS.
 						 */
-/* Number of full MSS to receive before Acking RFC2581 */
-#define TCP_DELACK_SEG          1
 
 #define TCP_RESOURCE_PROBE_INTERVAL ((unsigned)(HZ/2U)) /* Maximal interval between probes
 					                 * for local resources.
@@ -256,10 +264,6 @@ extern int sysctl_tcp_thin_linear_timeouts;
 extern int sysctl_tcp_thin_dupack;
 
 extern atomic_long_t tcp_memory_allocated;
-
-/* sysctl variables for controlling various tcp parameters */
-extern int sysctl_tcp_delack_seg;
-extern int sysctl_tcp_use_userconfig;
 extern struct percpu_counter tcp_sockets_allocated;
 extern int tcp_memory_pressure;
 
@@ -351,11 +355,6 @@ extern void tcp_twsk_destructor(struct sock *sk);
 extern ssize_t tcp_splice_read(struct socket *sk, loff_t *ppos,
 			       struct pipe_inode_info *pipe, size_t len,
 			       unsigned int flags);
-/* sysctl master controller */
-extern int tcp_use_userconfig_sysctl_handler(struct ctl_table *, int,
-				void __user *, size_t *, loff_t *);
-extern int tcp_proc_delayed_ack_control(struct ctl_table *, int,
-				void __user *, size_t *, loff_t *);
 
 static inline void tcp_dec_quickack_mode(struct sock *sk,
 					 const unsigned int pkts)

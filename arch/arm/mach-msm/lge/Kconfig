@@ -8,27 +8,6 @@ endmenu
 
 menu "LGE Specific Patches"
 
-config LGE_QFPROM_INTERFACE
-	bool "Support qfprom interface"
-	default n
-	depends on MACH_LGE
-	help
-	  LGE QFPROM DRIVER.
-
-config UPDATE_LCDC_LUT
-	bool "Set initial Qualcomm LCDC lut"
-	default n
-	depends on MACH_LGE
-	help
-	  Set initial Qualcomm LCDC Look Up Table.
-
-config LCD_KCAL
-	bool "Interface to calibrate LCD color temperature"
-	default n
-	depends on MACH_LGE && UPDATE_LCDC_LUT
-	help
-	  Interface to calibrate LCD color temperature
-
 config EARJACK_DEBUGGER
 	bool "Earjack UART debugger support"
 	depends on MACH_APQ8064_MAKO
@@ -44,4 +23,165 @@ config LGE_CRASH_HANDLER
 	help
 	  LGE Crash Handler
 
+#rename to LGE_CRASH_HANDLER by qct
+#config LGE_HANDLE_PANIC
+#    tristate "Support LGE Kernel Panic Handler"
+#    default n
+#    depends on MACH_LGE
+#    help
+#    LGE Error handler.
+
+config LGE_HIDDEN_RESET
+	tristate "LGE hidden reset"
+	default n
+	depends on MACH_LGE && LGE_CRASH_HANDLER
+	help
+	  Enables support for LGE hidden reset. For turn on this feature,
+	  "echo 1 > /sys/module/lge_handle_panic/parameters/hreset_enable"
+	  or "lge_handle_panic.hreset_enable=1" from cmdline.
+
+config LGE_PERSIST_RAM_START
+	hex "LGE persistent ram start address"
+	depends on ANDROID_PERSISTENT_RAM
+	default 0x88700000
+
+config LGE_PERSIST_TRACE_SIZE
+	hex "LGE persistent trace buffer size"
+	depends on ANDROID_PERSISTENT_TRACER
+	default 0x20000
+
+config LGE_BOOTLOADER_LOG
+    tristate "Support LGE bootloader log"
+    default n
+    depends on MACH_LGE
+    help
+    LGE bootloader log
+
+config LGE_QFPROM_INTERFACE
+	bool "Support qfprom interface"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE QFPROM DRIVER.
+
+config LGE_LCD_TUNING
+     bool "lcd_tuning"
+	 default n
+	 depends on MACH_LGE
+	 help
+		Support LCD tuning.
+
+#rename to UPDATE_LCDC_LUT by qct
+#config LGE_QC_LCDC_LUT
+#     bool "Set initial Qualcomm LCDC lut"
+#         default n
+#         depends on MACH_LGE
+#         help
+#	  Set initial Qualcomm LCDC Look Up Table.
+
+config UPDATE_LCDC_LUT
+	bool "Set initial Qualcomm LCDC lut"
+	default n
+	depends on MACH_LGE
+	help
+	  Set initial Qualcomm LCDC Look Up Table.
+	  	  
+config LCD_KCAL
+	bool "Interface to calibrate LCD color temperature"
+	default n
+	depends on MACH_LGE && UPDATE_LCDC_LUT
+	help
+	  Interface to calibrate LCD color temperature
+
+#rename to LCD_KCAL by qct
+#config LGE_KCAL
+#     bool "Interface to calibrate LCD color temperature"
+#         default n
+#         depends on MACH_LGE
+#         help
+#           Interface to calibrate LCD color temperature
+
+	 
+
+config LGE_KCAL_QLUT
+     bool "Interface to calibrate LCD color temperature by QLUT"
+         default n
+         depends on MACH_LGE && UPDATE_LCDC_LUT && LCD_KCAL
+         help
+                Interface to calibrate LCD color temperature by QLUT
+
+config LGE_USES_SMD_DS_TTY
+	bool "Explicitly use smd tty driver for DS"
+	default n
+	depends on MSM_SMD_TTY && MACH_LGE
+	help
+		In Qualcomm MSM8960, smd tty driver for ds(/dev/smd0) is not used.
+		Say yes if this tty driver must be used on LGE device. This is used
+		to connect smd channel in user space(for example, ATCMD processing).
+
+config LGE_SUSPEND_AUTOTEST
+    tristate "Test suspend/resume and earlysuspend/lateresume automatically"
+    default y
+    depends on MACH_LGE && SUSPEND && EARLYSUSPEND
+	help
+      This option will let you suspend your machine, and make it wake up
+	  a few seconds later using an timer automatically.  
+	  Enable this with a kernel parameter by sysfs.
+
+config LGE_LOG_SERVICE
+	bool "Support LGE log service"
+	default y
+	depends on MACH_LGE
+	help
+	  Support LGE log service. The author of this patch is cs77.ha@lge.com
+
+config LGE_LASTLBA_BACKUPGPT
+	bool "Force to find Backup GPT at LAST LBA"
+	depends on EFI_PARTITION
+	help
+	  Say Y here if you would like to make kernel always find Backup GPT
+	  at Last LBA.
+	
+config LGE_LH470WX1_NEW
+	bool "FX1 new lcd panel"
+	default n
+	help
+	  Select Y here if you are using new panel of fx1.
+  
+#BEGIN: 0019632 chanha.park@lge.com 2012-05-31
+#ADD: 0019632: [F200][BT] Bluetooth board bring-up	  
+config LGE_BLUESLEEP
+	default y
+	bool "MSM8960 LGE Bluetooth LPM"
+	depends on MACH_LGE
+#END: 0019632 chanha.park@lge.com 2012-05-31
+
+config LGE_LCD_UNDERRUN
+bool "lcd_underrun"
+   default n
+   depends on MACH_LGE
+   help
+       Show bus clock when underrun occurs.
+
+config LGE_LCD_UNDERRUN
+     bool "lcd_underrun"
+	 default n
+	 depends on MACH_LGE
+	 help
+		Show bus clock when underrun occurs.
+
+config LGE_BITE_RESET
+	tristate "Disable PS_HOLD reset"
+	default n
+	depends on MACH_LGE
+	help
+		Reset device by WDT BITE instead of PS_HOLD
+
+config LGE_BNR_RECOVERY_REBOOT
+	bool "Support PC suite BNR recovery reboot"
+	default y
+	depends on MACH_LGE
+	help
+		Support PC suite BNR recovery reboot. bnr recovery mode
+		could be entered with reboot --bnr_recovery cmd.
 endmenu

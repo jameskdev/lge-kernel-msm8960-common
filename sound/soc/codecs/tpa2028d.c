@@ -32,14 +32,83 @@
 
 #include <sound/tpa2028d.h>
 
-#define MODULE_NAME "tpa2028d"
+#define MODULE_NAME	"tpa2028d"
 
 #undef  AMP_DEBUG_PRINT
 #define AMP_DEBUG_PRINT
 
 #define AMP_IOCTL_MAGIC 't'
+/* BEGIN:0010385        ehgrace.kim@lge.com     2010.11.08*/
+/* MOD: add the get value for hiddenmenu */
 #define AMP_SET_DATA	_IOW(AMP_IOCTL_MAGIC, 0, struct amp_cal *)
 #define AMP_GET_DATA	_IOW(AMP_IOCTL_MAGIC, 1, struct amp_cal *)
+/* END:0010385        ehgrace.kim@lge.com     2010.11.08*/
+
+/* BEGIN:0010882        ehgrace.kim@lge.com     2010.11.15*/
+/* MOD: add the call mode */
+#define IN1_GAIN 0
+#define IN2_GAIN 1
+#define SPK_VOL  2
+#define HP_LVOL  3
+#define HP_RVOL	 4
+#define SPK_LIM 5
+#define HP_LIM 6
+#if 0
+struct amp_cal_type {
+	u8 in1_gain;
+	u8 in2_gain;
+	u8 spk_vol;
+	u8 hp_lvol;
+	u8 hp_rvol;
+	u8 mix_in1_gain;
+	u8 mix_in2_gain;
+	u8 mix_spk_vol;
+	u8 mix_hp_lvol;
+	u8 mix_hp_rvol;
+	u8 spk_lim;
+	u8 hp_lim;
+	u8 mix_spk_lim;
+	u8 mix_hp_lim;
+	u8 call_in1_gain;
+	u8 call_in2_gain;
+	u8 call_spk_vol;
+	u8 call_hp_lvol;
+	u8 call_hp_rvol;
+	u8 call_spk_lim;
+	u8 call_hp_lim;
+	u8 call_mix_spk_lim;
+	u8 call_mix_hp_lim;
+};
+
+
+/*BEGIN:0011017	ehgrace.kim@lge.com	2010.11.16, 2010.12.06, 2010.12.13, 2011.02.07, 2011.02.17*/
+/*MOD:apply the audio calibration */
+/*BEGIN:0010363	ehgrace.kim@lge.com	2010.11.01*/
+/*MOD:apply the audio calibration for spkand spk&headset */
+#if 0
+struct amp_cal_type amp_cal_data = { IN1GAIN_0DB, IN2GAIN_0DB, SPK_VOL_M10DB, HPL_VOL_0DB, HPR_VOL_M60DB, IN1GAIN_0DB, IN2GAIN_0DB, SPK_VOL_M1DB, HPL_VOL_0DB, HPR_VOL_M60DB };
+#else
+/*
+struct amp_cal_type amp_cal_data = { IN1GAIN_0DB, IN2GAIN_12DB, SPK_VOL_M9DB, HPL_VOL_M30DB, HPR_VOL_M30DB, IN1GAIN_0DB, IN2GAIN_12DB, SPK_VOL_M9DB, HPL_VOL_M30DB, HPR_VOL_M30DB };
+struct amp_cal_type amp_cal_data = { IN1GAIN_6DB, IN2GAIN_12DB, SPK_VOL_M2DB, HPL_VOL_M10DB, HPR_VOL_M10DB, IN1GAIN_6DB, IN2GAIN_12DB, SPK_VOL_M2DB, HPL_VOL_M10DB, HPR_VOL_M10DB };
+struct amp_cal_type amp_cal_data = { IN1GAIN_6DB, IN2GAIN_12DB, SPK_VOL_M2DB, HPL_VOL_M13DB, HPR_VOL_M13DB, IN1GAIN_6DB, IN2GAIN_12DB, SPK_VOL_M2DB, HPL_VOL_M21DB, HPR_VOL_M21DB };
+*/
+struct amp_cal_type amp_cal_data = {
+	IN1GAIN_6DB, IN2GAIN_12DB, SPK_VOL_M2DB, HPL_VOL_M1DB, HPR_VOL_M1DB,
+	IN1GAIN_6DB, IN2GAIN_12DB, SPK_VOL_M2DB, HPL_VOL_M21DB, HPR_VOL_M21DB,
+	SLIMLVL_4P90V, HLIMLVL_1P15V, SLIMLVL_4P90V, HLIMLVL_1P15V,
+	IN1GAIN_6DB, IN2GAIN_12DB, SPK_VOL_M2DB, HPL_VOL_M6DB, HPR_VOL_M6DB,
+	SLIMLVL_4P90V, HLIMLVL_1P15V, SLIMLVL_4P90V, HLIMLVL_1P15V};
+#endif
+/*END:0010363	ehgrace.kim@lge.com	2010.11.01*/
+/*END:0011017	ehgrace.kim@lge.com	2010.11.16, 2010.12.06, 2010.12.13, 2011.02.07, 2011.02.17*/
+
+/* BEGIN:0009753        ehgrace.kim@lge.com     2010.10.22*/
+/* MOD: modifiy to delete the first boot noise */
+bool first_boot = 1;
+/* END:0009753        ehgrace.kim@lge.com     2010.10.22*/
+/* END:0009748        ehgrace.kim@lge.com     2010.10.07*/
+#endif
 
 static uint32_t msm_snd_debug = 1;
 module_param_named(debug_mask, msm_snd_debug, uint, 0664);
@@ -104,6 +173,22 @@ int tpa2028d_poweron(void)
 
 	agc_output_limiter_disable = (agc_output_limiter_disable<<7);
 
+/*LGE_CHANGE_START
+ * In order to pass audio HW spec of EU EVE_GB operator
+ * 2012-12-07 hanna.oh@lge.com
+ */
+#ifdef CONFIG_L1_EU_TPA2028D_CAL
+/*  fail |= WriteI2C(IC_CONTROL, 0xC2);	//Turn on */
+	fail |= WriteI2C(IC_CONTROL, 0xE3); /*Tuen On*/
+	fail |= WriteI2C(AGC_ATTACK_CONTROL, 0x03); /*Tuen On*/
+	fail |= WriteI2C(AGC_RELEASE_CONTROL, 0x0B); /*Tuen On*/
+	fail |= WriteI2C(AGC_HOLD_TIME_CONTROL, 0x00); /*Tuen On*/
+	fail |= WriteI2C(AGC_FIXED_GAIN_CONTROL, agc_fixed_gain); /*Tuen On*/
+	fail |= WriteI2C(AGC1_CONTROL, 0x3E); /*Tuen On*/
+	fail |= WriteI2C(AGC2_CONTROL, 0xC0|agc_compression_rate); /*Tuen On*/
+	fail |= WriteI2C(IC_CONTROL, 0xC3); /*Tuen On*/
+#else
+/*  fail |= WriteI2C(IC_CONTROL, 0xC2);	//Turn on */
 	fail |= WriteI2C(IC_CONTROL, 0xE3); /*Tuen On*/
 	fail |= WriteI2C(AGC_ATTACK_CONTROL, 0x05); /*Tuen On*/
 	fail |= WriteI2C(AGC_RELEASE_CONTROL, 0x0B); /*Tuen On*/
@@ -112,6 +197,7 @@ int tpa2028d_poweron(void)
 	fail |= WriteI2C(AGC1_CONTROL, 0x3A|agc_output_limiter_disable); /*Tuen On*/
 	fail |= WriteI2C(AGC2_CONTROL, 0xC0|agc_compression_rate); /*Tuen On*/
 	fail |= WriteI2C(IC_CONTROL, 0xC3); /*Tuen On*/
+#endif
 
 	return fail;
 }
@@ -155,6 +241,232 @@ inline void set_amp_gain(int amp_state)
 	}
 }
 EXPORT_SYMBOL(set_amp_gain);
+
+/* BEGIN:0010882        ehgrace.kim@lge.com     2010.11.15*/
+/* MOD: add the call mode */
+/* BEGIN:0009748        ehgrace.kim@lge.com     2010.10.07*/
+/* ADD: modifiy the amp for sonification mode for subsystem audio calibration */
+/* BEGIN:0010385        ehgrace.kim@lge.com     2010.11.08*/
+/* MOD: add the get value for hiddenmenu */
+static long amp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	int rc = 0;
+#if 0
+	struct amp_cal amp_cal;
+
+	switch (cmd) {
+	case AMP_SET_DATA:
+		if (copy_from_user(&amp_cal, (void __user *) arg, sizeof(amp_cal))) {
+			MM_ERR("AMP_SET_DATA : invalid pointer\n");
+			rc = -EFAULT;
+			break;
+		}
+		switch (amp_cal.dev_type) {
+		case ICODEC_HEADSET_SPK_RX:
+			if (amp_cal.gain_type == IN1_GAIN)
+				amp_cal_data.mix_in1_gain = amp_cal.data;
+			else if (amp_cal.gain_type == IN2_GAIN)
+				amp_cal_data.mix_in2_gain = amp_cal.data;
+			else if (amp_cal.gain_type == SPK_VOL)
+				amp_cal_data.mix_spk_vol = amp_cal.data;
+			else if (amp_cal.gain_type == HP_LVOL)
+				amp_cal_data.mix_hp_lvol = amp_cal.data;
+			else if (amp_cal.gain_type == HP_RVOL)
+				amp_cal_data.mix_hp_rvol = amp_cal.data;
+			else if (amp_cal.gain_type == SPK_LIM)
+				amp_cal_data.mix_spk_lim = amp_cal.data;
+			else if (amp_cal.gain_type == HP_LIM)
+				amp_cal_data.mix_hp_lim = amp_cal.data;
+			else {
+				MM_ERR("invalid set_gain_type for HP & SPK  %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_HEADSET_ST_RX:
+			if (amp_cal.gain_type == IN1_GAIN)
+				amp_cal_data.in1_gain = amp_cal.data;
+			else if (amp_cal.gain_type == HP_LVOL)
+				amp_cal_data.hp_lvol = amp_cal.data;
+			else if (amp_cal.gain_type == HP_RVOL)
+				amp_cal_data.hp_rvol = amp_cal.data;
+			else if (amp_cal.gain_type == HP_LIM)
+				amp_cal_data.hp_lim = amp_cal.data;
+			else {
+				MM_ERR("invalid set_gain_type for HP %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_SPEAKER_RX:
+			if (amp_cal.gain_type == IN2_GAIN)
+				amp_cal_data.in2_gain = amp_cal.data;
+			else if (amp_cal.gain_type == SPK_VOL)
+				amp_cal_data.spk_vol = amp_cal.data;
+			else if (amp_cal.gain_type == SPK_LIM)
+				amp_cal_data.spk_lim = amp_cal.data;
+			else {
+				MM_ERR("invalid set_gain_type for SPK %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_HEADSET_PHONE_RX:
+			if (amp_cal.gain_type == IN1_GAIN)
+				amp_cal_data.call_in1_gain = amp_cal.data;
+			else if (amp_cal.gain_type == HP_LVOL)
+				amp_cal_data.call_hp_lvol = amp_cal.data;
+			else if (amp_cal.gain_type == HP_RVOL)
+				amp_cal_data.call_hp_rvol = amp_cal.data;
+			else if (amp_cal.gain_type == HP_LIM)
+				amp_cal_data.call_hp_lim = amp_cal.data;
+			else {
+				MM_ERR("invalid set_gain_type for HP_PHONE %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_SPEAKER_PHONE_RX:
+			if (amp_cal.gain_type == IN2_GAIN)
+				amp_cal_data.call_in2_gain = amp_cal.data;
+			else if (amp_cal.gain_type == SPK_VOL)
+				amp_cal_data.call_spk_vol = amp_cal.data;
+			else if (amp_cal.gain_type == SPK_LIM)
+				amp_cal_data.call_spk_lim = amp_cal.data;
+			else {
+				MM_ERR("invalid set_gain_type for SPK_PHONE %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+
+		default:
+			MM_ERR("unknown dev type for setdata %d\n", amp_cal.dev_type);
+			rc = -EFAULT;
+ 			break;
+		}
+		break;
+	case AMP_GET_DATA:
+		if (copy_from_user(&amp_cal, (void __user *) arg, sizeof(amp_cal))) {
+			MM_ERR("AMP_GET_DATA : invalid pointer\n");
+			rc = -EFAULT;
+			break;
+		}
+		switch (amp_cal.dev_type) {
+		case ICODEC_HEADSET_SPK_RX:
+			if (amp_cal.gain_type == IN1_GAIN)
+				amp_cal.data = amp_cal_data.mix_in1_gain;
+			else if (amp_cal.gain_type == IN2_GAIN)
+				amp_cal.data = amp_cal_data.mix_in2_gain;
+			else if (amp_cal.gain_type == SPK_VOL)
+				amp_cal.data = amp_cal_data.mix_spk_vol;
+			else if (amp_cal.gain_type == HP_LVOL)
+				amp_cal.data = amp_cal_data.mix_hp_lvol;
+			else if (amp_cal.gain_type == HP_RVOL)
+				amp_cal.data = amp_cal_data.mix_hp_rvol;
+			else if (amp_cal.gain_type == SPK_LIM)
+				amp_cal.data = amp_cal_data.mix_spk_lim;
+			else if (amp_cal.gain_type == HP_LIM)
+				amp_cal.data = amp_cal_data.mix_hp_lim;
+			else {
+				MM_ERR("invalid get_gain_type for HP & SPK %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_HEADSET_ST_RX:
+			if (amp_cal.gain_type == IN1_GAIN)
+				amp_cal.data = amp_cal_data.in1_gain;
+			else if (amp_cal.gain_type == HP_LVOL)
+				amp_cal.data = amp_cal_data.hp_lvol;
+			else if (amp_cal.gain_type == HP_RVOL)
+				amp_cal.data = amp_cal_data.hp_rvol;
+			else if (amp_cal.gain_type == HP_LIM)
+				amp_cal.data = amp_cal_data.hp_lim;
+			else {
+				MM_ERR("invalid get_gain_type for HP %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_SPEAKER_RX:
+			if (amp_cal.gain_type == IN2_GAIN)
+				amp_cal.data = amp_cal_data.in2_gain;
+			else if (amp_cal.gain_type == SPK_VOL)
+				amp_cal.data = amp_cal_data.spk_vol;
+			else if (amp_cal.gain_type == SPK_LIM)
+				amp_cal.data = amp_cal_data.spk_lim;
+			else {
+				MM_ERR("invalid get_gain_type for SPK %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_HEADSET_PHONE_RX:
+			if (amp_cal.gain_type == IN1_GAIN)
+				amp_cal.data = amp_cal_data.call_in1_gain;
+			else if (amp_cal.gain_type == HP_LVOL)
+				amp_cal.data = amp_cal_data.call_hp_lvol;
+			else if (amp_cal.gain_type == HP_RVOL)
+				amp_cal.data = amp_cal_data.call_hp_rvol;
+			else if (amp_cal.gain_type == HP_LIM)
+				amp_cal.data = amp_cal_data.call_hp_lim;
+			else {
+				MM_ERR("invalid get_gain_type for HP_PHONE %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		case ICODEC_SPEAKER_PHONE_RX:
+			if (amp_cal.gain_type == IN2_GAIN)
+				amp_cal.data = amp_cal_data.call_in2_gain;
+			else if (amp_cal.gain_type == SPK_VOL)
+				amp_cal.data = amp_cal_data.call_spk_vol;
+			else if (amp_cal.gain_type == SPK_LIM)
+				amp_cal.data = amp_cal_data.call_spk_lim;
+			else {
+				MM_ERR("invalid get_gain_type for SPK_PHONE %d\n", amp_cal.gain_type);
+				rc = -EFAULT;
+			}
+			break;
+		default:
+			MM_ERR("unknown dev type for getdata %d\n", amp_cal.dev_type);
+			rc = -EFAULT;
+			break;
+		}
+		MM_ERR("AMP_GET_DATA :dev %d, gain %d, data %d \n", amp_cal.dev_type, amp_cal.gain_type, amp_cal.data);
+		if (copy_to_user((void __user *)arg, &amp_cal, sizeof(amp_cal))) {
+			MM_ERR("AMP_GET_DATA : invalid pointer\n");
+			rc = -EFAULT;
+		}
+		break;
+	default:
+		MM_ERR("unknown command\n");
+		rc = -EINVAL;
+		break;
+	}
+#endif
+	return rc;
+}
+/* END:0010385        ehgrace.kim@lge.com     2010.11.08*/
+/* END:0010882        ehgrace.kim@lge.com     2010.11.15*/
+
+static int amp_open(struct inode *inode, struct file *file)
+{
+	int rc = 0;
+	return rc;
+}
+
+static int amp_release(struct inode *inode, struct file *file)
+{
+	int rc = 0;
+	return rc;
+}
+
+static const struct file_operations tpa_fops = {
+	.owner		= THIS_MODULE,
+	.open		= amp_open,
+	.release	= amp_release,
+	.unlocked_ioctl	= amp_ioctl,
+};
+
+struct miscdevice amp_misc = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "tpa_amp",
+	.fops = &tpa_fops,
+};
+/* END:0009748        ehgrace.kim@lge.com     2010.10.07*/
 
 static ssize_t
 tpa2028d_comp_rate_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -270,6 +582,11 @@ static int tpa2028d_amp_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, data);
 
 	set_amp_gain(SPK_OFF);
+
+/* BEGIN:0009748        ehgrace.kim@lge.com     2010.10.07*/
+/* ADD: modifiy the amp for sonification mode for subsystem audio calibration */
+	err = misc_register(&amp_misc);
+/* END:0009748        ehgrace.kim@lge.com     2010.10.07*/
 
 	for (i = 0; i < ARRAY_SIZE(tpa2028d_device_attrs); i++) {
 		err = device_create_file(&client->dev, &tpa2028d_device_attrs[i]);

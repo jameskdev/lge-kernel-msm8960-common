@@ -2,7 +2,7 @@
  *
  * MSM MDP Interface (used by framebuffer core)
  *
- * Copyright (c) 2007-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2013, The Linux Foundation. All rights reserved.
  * Copyright (C) 2007 Google Incorporated
  *
  * This software is licensed under the terms of the GNU General Public
@@ -44,8 +44,16 @@
 #endif
 #include "mipi_dsi.h"
 
+/* LGE_CHANGE
+ * for inital qct lcdc lut set-up
+ * 2012-01-10, jh.chun@lge.com
+ */
+#if defined (CONFIG_UPDATE_LCDC_LUT)
+#include "lge_qlut.h"
+#endif
+
 uint32 mdp4_extn_disp;
-u32 mdp_iommu_max_map_size;
+
 static struct clk *mdp_clk;
 static struct clk *mdp_pclk;
 static struct clk *mdp_lut_clk;
@@ -542,7 +550,20 @@ error:
 
 spinlock_t mdp_lut_push_lock;
 static int mdp_lut_i;
+#ifdef CONFIG_UPDATE_LCDC_LUT
+extern int g_qlut_change_by_kernel;
+extern uint32 p_lg_qc_lcdc_lut[];
 
+/* LGE_CHANGE
+ * for lcd temperature calibration
+ * 2012-01-10, jh.chun@lge.com
+ */
+#ifdef CONFIG_LGE_KCAL_QLUT
+extern int g_kcal_r;
+extern int g_kcal_g;
+extern int g_kcal_b;
+#endif /* CONFIG_LGE_KCAL_QLUT */
+#endif /* CONFIG_UPDATE_LCDC_LUT */
 static int mdp_lut_hw_update(struct fb_cmap *cmap)
 {
 	int i;
@@ -554,10 +575,34 @@ static int mdp_lut_hw_update(struct fb_cmap *cmap)
 	c[2] = cmap->red;
 
 	for (i = 0; i < cmap->len; i++) {
+#ifdef CONFIG_UPDATE_LCDC_LUT
+		if(g_qlut_change_by_kernel) {
+			r = ((p_lg_qc_lcdc_lut[i] & R_MASK) >> R_SHIFT);
+			g = ((p_lg_qc_lcdc_lut[i] & G_MASK) >> G_SHIFT);
+			b = ((p_lg_qc_lcdc_lut[i] & B_MASK) >> B_SHIFT);
+#ifdef CONFIG_LGE_KCAL_QLUT
+			r = scaled_by_kcal(r, g_kcal_r);
+			g = scaled_by_kcal(g, g_kcal_g);
+			b = scaled_by_kcal(b, g_kcal_b);
+			/* printk("   mdp kcal r[%d] =%x g[%d] = %x b[%d] =%x\n"
+			, i, r, i, g, i, b); */
+#endif
+		} else
+#endif
 		if (copy_from_user(&r, cmap->red++, sizeof(r)) ||
 		    copy_from_user(&g, cmap->green++, sizeof(g)) ||
 		    copy_from_user(&b, cmap->blue++, sizeof(b)))
 			return -EFAULT;
+
+#ifdef CMAP_RESTORE
+               if (cmap_lut_changed)
+               {
+                       r = ~(r & 0xff);
+                       g = ~(g & 0xff);
+                       b = ~(b & 0xff);
+               }
+#endif
+
 
 		last_lut[i] = ((g & 0xff) | ((b & 0xff) << 8) |
 				((r & 0xff) << 16));
@@ -1841,7 +1886,13 @@ void mdp_clk_ctrl(int on)
 			pr_err("%s: %d: mdp clk off is invalid\n",
 			       __func__, __LINE__);
 	}
+#ifdef CONFIG_MACH_LGE	// for debugging
+	if (mdp_clk_cnt == 0)
+		pr_info("%s: on=%d cnt=%d\n", __func__, on, mdp_clk_cnt);
+#else
 	pr_debug("%s: on=%d cnt=%d\n", __func__, on, mdp_clk_cnt);
+#endif
+
 	mutex_unlock(&mdp_suspend_mutex);
 }
 
@@ -2434,14 +2485,6 @@ static int mdp_on(struct platform_device *pdev)
 		mfd->cont_splash_done = 1;
 	}
 
-	if(mfd->index == 0)
-		mdp_iommu_max_map_size = mfd->max_map_size;
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-
-	ret = panel_next_on(pdev);
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
-
-
 	if (mdp_rev >= MDP_REV_40) {
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 		mdp_clk_ctrl(1);
@@ -2477,6 +2520,11 @@ static int mdp_on(struct platform_device *pdev)
 		vsync_cntrl.dev = mfd->fbi->dev;
 		atomic_set(&vsync_cntrl.suspend, 1);
 	}
+
+    mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
+    ret = panel_next_on(pdev);
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	mdp_histogram_ctrl_all(TRUE);
 
@@ -2805,6 +2853,10 @@ static int mdp_irq_clk_setup(struct platform_device *pdev,
 	return 0;
 }
 
+#ifdef CONFIG_LGE_LCD_UNDERRUN
+extern void init_underrun_log(void);
+#endif
+
 static int mdp_probe(struct platform_device *pdev)
 {
 	struct platform_device *msm_fb_dev = NULL;
@@ -2858,6 +2910,9 @@ static int mdp_probe(struct platform_device *pdev)
 
 		mdp_hw_version();
 
+#ifdef CONFIG_LGE_LCD_UNDERRUN
+		init_underrun_log();
+#endif
 		/* initializing mdp hw */
 #ifdef CONFIG_FB_MSM_MDP40
 		if (!(mdp_pdata->cont_splash_enabled))
@@ -3059,6 +3114,9 @@ static int mdp_probe(struct platform_device *pdev)
 	case MIPI_VIDEO_PANEL:
 #ifndef CONFIG_FB_MSM_MDP303
 		mipi = &mfd->panel_info.mipi;
+#ifdef CONFIG_MACH_LGE
+		mdp4_dsi_vsync_init(0);
+#endif
 		mfd->vsync_init = mdp4_dsi_vsync_init;
 		mfd->vsync_show = mdp4_dsi_video_show_event;
 		mfd->hw_refresh = TRUE;
@@ -3240,8 +3298,6 @@ static int mdp_probe(struct platform_device *pdev)
 			pdata->off = mdp4_overlay_writeback_off;
 			mfd->dma_fnc = mdp4_writeback_overlay;
 			mfd->dma = &dma_wb_data;
-			mutex_init(&mfd->writeback_mutex);
-			mutex_init(&mfd->unregister_mutex);
 			mdp4_display_intf_sel(EXTERNAL_INTF_SEL, DTV_INTF);
 		}
 		break;

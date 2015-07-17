@@ -2983,7 +2983,6 @@ static int msm_pcm_routing_prepare(struct snd_pcm_substream *substream)
 						fdai->event_info.priv_data);
 				fdai->be_srate = 0; /* might not need it */
 			}
-
 			channels = bedai->channel;
 			if ((playback || capture)
 				&& ((channels == 2) || (channels == 1)) &&

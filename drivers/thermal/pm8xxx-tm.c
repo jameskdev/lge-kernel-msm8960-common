@@ -606,8 +606,13 @@ static int __devinit pm8xxx_tm_probe(struct platform_device *pdev)
 
 	chip->tz_dev = thermal_zone_device_register(chip->cdata.tm_name,
 			TRIP_NUM, chip, tz_ops, 0, 0, 0, 0);
-
+#ifdef CONFIG_MACH_LGE
+	/* 2012-01-10 modify error detection code
+	 * thermal_zone_device_register function does not return null when error occurs */
+	if (IS_ERR(chip->tz_dev)) {
+#else	/* origin */
 	if (chip->tz_dev == NULL) {
+#endif
 		pr_err("thermal_zone_device_register() failed.\n");
 		rc = -ENODEV;
 		goto err_fail_adc;

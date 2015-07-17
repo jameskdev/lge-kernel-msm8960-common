@@ -355,6 +355,19 @@ void mmc_start_bkops(struct mmc_card *card, bool from_exception)
 	BUG_ON(!card);
 	if (!card->ext_csd.bkops_en)
 		return;
+	#ifdef CONFIG_LGE_MMC_BKOPS_DISABLE
+		/* LGE_CHANGE
+		* Disable eMMC's BKOPS for only D1LV(VS930) because of samsung-crappy-eMMC.
+		* Other projecct doesn't need to refer below code.
+		* 2012-11-15, warkap.seo@lge.com
+		*/
+	else {
+		printk(KERN_INFO "[LGE][MMC][%-18s( )]=======================================\n", __func__);
+		printk(KERN_INFO "[LGE][MMC][%-18s( )] BKOPS ENABLED!, bkops_en:%d, caps2:%d\n", __func__, card->ext_csd.bkops_en, card->host->caps2 & MMC_CAP2_BKOPS);
+		printk(KERN_INFO "[LGE][MMC][%-18s( )] This must not be printed! If you see this log, call warkap.seo@lge.com\n", __func__);
+		printk(KERN_INFO "[LGE][MMC][%-18s( )]=======================================\n", __func__);
+	}
+	#endif
 
 	if ((card->bkops_info.cancel_delayed_work) && !from_exception) {
 		pr_debug("%s: %s: cancel_delayed_work was set, exit\n",
@@ -878,9 +891,19 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 			 * previous value of 300ms is known to be
 			 * insufficient for some cards.
 			 */
-			limit_us = 3000000;
+			limit_us = 3500000;
 		else
+			#ifdef CONFIG_MACH_LGE
+			/* LGE_CHANGE
+			 * Although we already applied enough time,
+			 * timeout-error occurs until now with several-ultimate-crappy-memory.
+			 * So, we give more time than before.
+			 * 2012-09-28, G1-FS@lge.com, G1-JB-FS@lge.com
+			 */
+			limit_us = 300000;
+			#else
 			limit_us = 100000;
+			#endif
 
 		/*
 		 * SDHC cards always use these fixed values.
@@ -921,6 +944,13 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	if (card->quirks & MMC_QUIRK_INAND_DATA_TIMEOUT) {
 		data->timeout_ns = 4000000000u; /* 4s */
 		data->timeout_clks = 0;
+	}
+	// increase data timeout
+	if (mmc_card_mmc(card)) {
+		if (data->timeout_ns < 4000000000u){
+			data->timeout_ns = 4000000000u; /* 4s at minimum */
+			//printk("%s: %s: data->timeout_ns(4sec)\n", mmc_hostname(card->host), __func__);
+		}
 	}
 }
 EXPORT_SYMBOL(mmc_set_data_timeout);
@@ -1505,7 +1535,16 @@ void mmc_power_up(struct mmc_host *host)
 	 * This delay should be sufficient to allow the power supply
 	 * to reach the minimum voltage.
 	 */
+
+#ifdef CONFIG_MACH_LGE
+	/* LGE_CHANGE
+	* Augmenting delay-time for some crappy card.
+	* 2011-11-10, warkap.seo@lge.com 
+	*/
+	mmc_delay(20);
+#else
 	mmc_delay(10);
+#endif
 
 	host->ios.clock = host->f_init;
 
@@ -1516,7 +1555,15 @@ void mmc_power_up(struct mmc_host *host)
 	 * This delay must be at least 74 clock sizes, or 1 ms, or the
 	 * time required to reach a stable voltage.
 	 */
+#ifdef CONFIG_MACH_LGE
+	/* LGE_CHANGE
+	* Augmenting delay-time for some crappy card.
+	* 2011-11-10, warkap.seo@lge.com 
+	*/
+	mmc_delay(20);
+#else
 	mmc_delay(10);
+#endif
 
 	mmc_host_clk_release(host);
 }
@@ -1847,7 +1894,7 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 {
 	struct mmc_command cmd = {0};
 	unsigned int qty = 0;
-	unsigned long timeout;
+        unsigned long timeout = 0;	
 	int err;
 
 	/*
@@ -1911,7 +1958,22 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 
 	memset(&cmd, 0, sizeof(struct mmc_command));
 	cmd.opcode = MMC_ERASE;
+	#ifdef CONFIG_LGE_MMC_ERASE_TRIM_ARGU_03
+	/* LGE_CHANGE
+	* This is only for D1LV(VS930, Samsung Crappy-eMMC)
+	* When we use ext4-mount-option-discard, Samsung eMMC is corrupted.
+	* So, Samsung suggest that we use argument(0x00000003)
+	* Do not refer below code.
+	* 2012-06-28, warkap.seo@lge.com
+	*/
+	if (mmc_card_sd(card))
+		cmd.arg = arg;
+	else
+		cmd.arg = 0x00000003;
+
+	#else
 	cmd.arg = arg;
+	#endif
 	cmd.flags = MMC_RSP_SPI_R1B | MMC_RSP_R1B | MMC_CMD_AC;
 	cmd.cmd_timeout_ms = mmc_erase_timeout(card, arg, qty);
 	err = mmc_wait_for_cmd(card->host, &cmd, 0);
@@ -1940,15 +2002,15 @@ static int mmc_do_erase(struct mmc_card *card, unsigned int from,
 			goto out;
 		}
 
-		/* Timeout if the device never becomes ready for data and
-		 * never leaves the program state.
-		 */
-		if (time_after(jiffies, timeout)) {
-			pr_err("%s: Card stuck in programming state! %s\n",
-				mmc_hostname(card->host), __func__);
-			err =  -EIO;
-			goto out;
-		}
+               /* Timeout if the device never becomes ready for data and
+                * never leaves the program state.
+                */
+               if (time_after(jiffies, timeout)) {
+                       pr_err("%s: Card stuck in programming state! %s\n",
+                               mmc_hostname(card->host), __func__);
+                       err =  -EIO;
+                       goto out;
+               }
 
 	} while (!(cmd.resp[0] & R1_READY_FOR_DATA) ||
 		 (R1_CURRENT_STATE(cmd.resp[0]) == R1_STATE_PRG));
@@ -2719,6 +2781,14 @@ void mmc_rescan(struct work_struct *work)
 		container_of(work, struct mmc_host, detect.work);
 	bool extend_wakelock = false;
 
+#ifdef CONFIG_MACH_LGE
+	/* LGE_CHANGE
+	* Adding Print
+	* 2011-11-10, warkap.seo@lge.com
+	*/
+	printk(KERN_INFO "[LGE][MMC][%-18s( ) START!] \n", __func__);
+#endif
+
 	if (host->rescan_disable)
 		return;
 
@@ -2971,6 +3041,18 @@ int mmc_cache_ctrl(struct mmc_host *host, u8 enable)
 	if (!(host->caps2 & MMC_CAP2_CACHE_CTRL) ||
 			mmc_card_is_removable(host))
 		return err;
+
+	/* mmc_cache_ctrl is called during the suspend path and it used
+	   mmc_claim_host which is a blocking call and the device never
+	   really suspends as it waits for the host to be available.
+	   This also leads to race conditions during runtime power
+	   management operation, for example, runtime suspend can start
+	   while the device is being runtime resumed. So in order to
+	   prevent this, mmc_try_claim_host should be used during
+	   suspend path, which is non-blocking.	*/
+
+	if (!mmc_try_claim_host(host))
+               return -EBUSY;
 
 	if (card && mmc_card_mmc(card) &&
 			(card->ext_csd.cache_size > 0)) {

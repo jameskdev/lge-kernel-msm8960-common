@@ -490,6 +490,32 @@ config SYNA_MULTI_TOUCH
 	depends on TOUCHSCREEN_SYNAPTICS_RMI4_I2C
 	default y
 
+config TOUCHSCREEN_SYNAPTICS_I2C_RMI4
+	tristate "Synaptics RMI4 protocol based I2C interface Touchscreen Driver"
+	help
+	  This enables support for Synaptics RMI4 protocol I2C interface Touchscreens.
+choice
+	prompt "Register map"
+	depends on TOUCHSCREEN_SYNAPTICS_I2C_RMI4
+
+config TOUCH_REG_MAP_TM1804
+	bool "TM1804"
+	depends on TOUCHSCREEN_SYNAPTICS_I2C_RMI4
+	help
+         Register map TM1804.
+config TOUCH_REG_MAP_TM1814
+	bool "TM1814"
+	depends on TOUCHSCREEN_SYNAPTICS_I2C_RMI4
+	help
+         Register map TM1804.
+endchoice
+
+config TOUCH_SYNAPTICS_FW_UPGRADE
+	bool "Synaptics ClearPad General F/W upgread"
+	depends on TOUCHSCREEN_SYNAPTICS_I2C_RMI4
+	help
+	  This enables support for Synaptics general F/W upgrade.
+
 config TOUCHSCREEN_TOUCHRIGHT
 	tristate "Touchright serial touchscreen"
 	select SERIO
@@ -945,6 +971,267 @@ config TOUCHSCREEN_FT5X06
 
          To compile this driver as a module, choose M here: the
          module will be called ft5x06_ts.
+
+config TOUCHSCREEN_MMS128
+           tristate "MELFAS MMS-128 touchscreen"
+           depends on I2C
+       default n
+           help
+             Say Y here if you have the MELFAS MMS-128 touchscreen controller
+                 chip in your system.
+
+                 If unsure, say N.
+
+                 To compile this driver as a module, choose M here: the
+                 module will be called melfas_ts.
+
+config USING_INNOTEK_PANEL_3_5
+        tristate "MELFAS MMS-128 touchscreen with INNOTEK Panel for L0_MPCS board"
+        depends on TOUCHSCREEN_MMS128
+        default n
+           help
+             Say Y here if you have the MELFAS MMS-128 touchscreen controller
+                 chip in your system.
+
+                 If unsure, say N.
+
+                 To compile this driver as a module, choose M here: the
+                 module will be called melfas_ts.
+
+config TOUCHSCREEN_MMS136
+	   tristate "MELFAS MMS-136 touchscreen"
+	   depends on I2C
+       default n
+	   help
+	     Say Y here if you have the MELFAS MMS-136 touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called melfas_ts.
+
+config LGE_TOUCHSCREEN_CORE_325
+	   tristate "SYNAPTICS touchscreen"
+	   depends on I2C
+       default n
+	   help
+	     Say Y here if you have the SYNAPTICS touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called SYNAPTICS_ts.
+
+config LGE_TOUCH_SYNAPTICS_325
+	   tristate "SYNAPTICS touchscreen"
+	   depends on I2C
+       default n
+	   help
+	     Say Y here if you have the SYNAPTICS touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called SYNAPTICS_ts.
+
+config LGE_TOUCH_SYNAPTICS_325_FW_UPGRADE
+	   tristate "SYNAPTICS touchscreen"
+	   depends on I2C
+       default n
+	   help
+	     Say Y here if you have the SYNAPTICS touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called SYNAPTICS_ts.
+
+config LGE_TOUCHSCREEN_CORE_f200
+	   tristate "SYNAPTICS touchscreen"
+	   depends on I2C
+       default n
+	   help
+	     Say Y here if you have the SYNAPTICS touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called SYNAPTICS_ts.
+
+config LGE_TOUCH_SYNAPTICS_f200
+	   tristate "SYNAPTICS touchscreen"
+	   depends on I2C
+       default n
+	   help
+	     Say Y here if you have the SYNAPTICS touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called SYNAPTICS_ts.
+
+config LGE_TOUCH_SYNAPTICS_f200_FW_UPGRADE
+	   tristate "SYNAPTICS touchscreen"
+	   depends on I2C
+       default n
+	   help
+	     Say Y here if you have the SYNAPTICS touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called SYNAPTICS_ts.
+config TOUCHSCREEN_QT602240
+	tristate "QT602240 I2C Touchscreen"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you have the AT42QT602240/ATMXT224 I2C touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called qt602240_ts.
+
+config USING_TOVIS_PANEL
+	tristate "MELFAS MMS-136 touchscreen with TOVIS Panel for D1L_DCM & KR board"
+	depends on TOUCHSCREEN_MMS136
+	default n
+	   help
+	     Say Y here if you have the MELFAS MMS-136 touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called melfas_ts.
+
+config USING_TOVIS_PANEL_4_0
+	tristate "MELFAS MMS-136 touchscreen with TOVIS Panel for L2S board"
+	depends on TOUCHSCREEN_MMS136
+	default n
+	   help
+	     Say Y here if you have the MELFAS MMS-136 touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called melfas_ts.
+
+config USING_INNOTEK_PANEL_4_5
+	tristate "MELFAS MMS-136 touchscreen with INNOTEK Panel for D1L_ATT board"
+	depends on TOUCHSCREEN_MMS136
+	default n
+	   help
+	     Say Y here if you have the MELFAS MMS-136 touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called melfas_ts.
+
+config USING_INNOTEK_PANEL_4_7
+	tristate "MELFAS MMS-136 touchscreen with INNOTEK Panel for D1L_VZW board"
+	depends on TOUCHSCREEN_MMS136
+	default n
+	   help
+	     Say Y here if you have the MELFAS MMS-136 touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called melfas_ts.
+
+config USING_INNOTEK_PANEL_4_3
+	tristate "MELFAS MMS-136 touchscreen with INNOTEK Panel for L1_ATT & L1_TELSTRA board"
+	depends on TOUCHSCREEN_MMS136
+	default n
+	   help
+	     Say Y here if you have the MELFAS MMS-136 touchscreen controller
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called melfas_ts.
+
+config USING_INNOTEK_PANEL_4_3_BUTTON_3_ONLY
+	tristate "MELFAS MMS-136 touchscreen with INNOTEK 3 button panel for L1_ATT & L1_TELSTRA board"
+	depends on TOUCHSCREEN_MMS136
+	default n
+	   help
+	     Say Y here if you have the MELFAS MMS-136 3 button touchscreen panel
+		 chip in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called melfas_ts.
+
+config TOUCHSCREEN_ATMEL_MAXT224E
+       tristate "Atmel maXT224E based touchscreens"
+       depends on I2C
+       default n
+       help
+         Say Y here if you have an Atmel Maxtouch based touchscreen.
+
+         If unsure, say N.
+
+         To compile this driver as a module, choose M here: the
+         module will be called atmel_ts.
+
+		
+config	TOUCHSCREEN_S3200_SYNAPTICS_TS
+		tristate "SYNAPTICS DCM ONLY TOUCHSCREEN"
+		depends on I2C
+		default n
+		help
+			Say Y here if you have a SYNAPTICS ON TOUCHSCREEN
+			connect to your system.
+
+
+config	TOUCHSCREEN_S340010_SYNAPTICS_TK
+		tristate "SYNAPTICS DCM based KeyTouch"
+		depends on I2C
+		default n
+		help
+			Say Y here if you have the SYNAPTICS TOUCH KEY
+			connect to your system.
+
+config TS_INFO_CLASS
+	   tristate "Use Ts info Class for unified PATH"
+	   depends on TOUCHSCREEN_MMS136 || TOUCHSCREEN_SYNAPTICS_I2C_RMI4 || TOUCHSCREEN_S3200_SYNAPTICS_TS || TOUCHSCREEN_MMS128 || LGE_TOUCHSCREEN_CORE_325
+       default n
+	   help
+	     Say Y here if you have the touchscreen info class in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called ts info class.
+
+config LGE_TOUCH_SYNAPTICS_325_CMD_F54
+	tristate "Use F54 Command in touchscreen driver"
+	depends on LGE_TOUCHSCREEN_CORE_325
+	default n
+	help
+	 Say Y here if you have the touchscreen debug class F54 in your system.
+
+		 If unsure, say N.
+
+		 To compile this driver as a module, choose M here: the
+		 module will be called ts debug class.
 
 config TOUCHSCREEN_LGE_COMMON
 	bool "LGE Touch common driver"

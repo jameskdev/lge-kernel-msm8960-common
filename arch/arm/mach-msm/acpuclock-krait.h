@@ -259,6 +259,9 @@ struct acpuclk_krait_params {
 	phys_addr_t pte_efuse_phys;
 	struct msm_bus_scale_pdata *bus_scale;
 	unsigned long stby_khz;
+#ifdef CONFIG_MACH_LGE
+	struct pvs_table (*pvs_tables_lge_factory)[NUM_PVS];
+#endif
 };
 
 /**

@@ -259,7 +259,9 @@ static int pmic8xxx_kp_read_matrix(struct pmic8xxx_kp *kp, u16 *new_state,
 
 	return rc;
 }
-
+#if defined (CONFIG_MACH_MSM8960_VU2)
+extern void home_key_detection(int keycode);		/*lge_touch_core_f200.c*/
+#endif
 static void __pmic8xxx_kp_scan_matrix(struct pmic8xxx_kp *kp, u16 *new_state,
 					 u16 *old_state)
 {
@@ -278,6 +280,77 @@ static void __pmic8xxx_kp_scan_matrix(struct pmic8xxx_kp *kp, u16 *new_state,
 			dev_dbg(kp->dev, "key [%d:%d] %s\n", row, col,
 					!(new_state[row] & (1 << col)) ?
 					"pressed" : "released");
+#ifdef CONFIG_MACH_LGE
+#if defined (CONFIG_MACH_MSM8960_FX1)
+			switch (row) {
+				case 0:
+					switch (col) {
+						case 0:		/* row:0, col:0 */
+							printk(KERN_INFO "[key] volume down ");
+							break;
+						case 1:		/* row:0, col:1 */
+							printk(KERN_INFO "[key] volume up ");
+							break;
+						case 2:		/* row:0, col:2 */
+							printk(KERN_INFO "[key] quick memo ");
+							break;
+						default:
+							printk(KERN_INFO "[key] unknown ");
+							break;
+					}
+					break;
+				case 1:
+					switch (col) {
+						case 0:		/* row:1, col:0 */
+							printk(KERN_INFO "[key] home ");
+							break;
+						default:
+							printk(KERN_INFO "[key] unknown ");
+							break;
+					}
+					break;
+				default:
+					break;
+			}
+			printk(" key is %s\n", !(new_state[row] & (1 << col)) ? "pressed" : "released");
+#elif defined (CONFIG_MACH_MSM8960_VU2)
+			switch (row) {
+				case 0:
+					switch (col) {
+						case 0:		/* row:0, col:0 */
+							printk(KERN_INFO "[key] volume up ");
+							break;
+						case 1:		/* row:0, col:1 */
+							printk(KERN_INFO "[key] volume down ");
+							break;
+						case 2:		/* row:0, col:2 */
+							printk(KERN_INFO "[key] home ");
+							break;
+						default:
+							printk(KERN_INFO "[key] unknown ");
+							break;
+					}
+					break;
+				case 1:
+					switch (col) {
+						case 0:		/* row:1, col:0 */
+							printk(KERN_INFO "[key] quick memo ");
+							break;
+						default:
+							printk(KERN_INFO "[key] unknown ");
+							break;
+					}
+					break;
+				default:
+					break;
+			}
+			printk(" key is %s\n", !(new_state[row] & (1 << col)) ? "pressed" : "released");
+#else
+			printk("[key] [%d:%d] %s\n", row, col,
+					!(new_state[row] & (1 << col)) ?
+					"pressed" : "released");
+#endif
+#endif
 
 			code = MATRIX_SCAN_CODE(row, col, PM8XXX_ROW_SHIFT);
 
@@ -285,7 +358,12 @@ static void __pmic8xxx_kp_scan_matrix(struct pmic8xxx_kp *kp, u16 *new_state,
 			input_report_key(kp->input,
 					kp->keycodes[code],
 					!(new_state[row] & (1 << col)));
-
+#if defined (CONFIG_MACH_MSM8960_VU2)
+			if(!(new_state[row] & (1 << col)) && kp->keycodes[code] == 172){ /*Home key pressed*/
+					printk("[Touch] Home Key Pressed\n");
+					home_key_detection(kp->keycodes[code]);		/*if Home Key Pressed, call 'home_key_detection' function for ghost touch detect algorithm*/
+			}
+#endif
 			input_sync(kp->input);
 		}
 	}

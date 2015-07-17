@@ -995,8 +995,8 @@ int slim_xfer_msg(struct slim_controller *ctrl, struct slim_device *sbdev,
 				ret = 0;
 		} else if (ret < 0 && !msg->comp) {
 			struct slim_msg_txn *txn;
-			mutex_lock(&ctrl->m_ctrl);
 			dev_err(&ctrl->dev, "slimbus Read error");
+			mutex_lock(&ctrl->m_ctrl);
 			txn = ctrl->txnt[tid];
 			/* Invalidate the transaction */
 			ctrl->txnt[tid] = NULL;
@@ -2917,7 +2917,7 @@ int slim_control_ch(struct slim_device *sb, u16 chanh,
 				}
 			}
 			if (add_mark_removal == true) {
-				ret = add_pending_ch(&sb->mark_removal, chan);
+			ret = add_pending_ch(&sb->mark_removal, chan);
 				if (ret)
 					break;
 			}

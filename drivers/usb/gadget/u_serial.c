@@ -971,6 +971,10 @@ static int gs_write(struct tty_struct *tty, const unsigned char *buf, int count)
 	unsigned long	flags;
 	int		status;
 
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	if(!port)
+		return 0;
+#endif
 	pr_vdebug("gs_write: ttyGS%d (%p) writing %d bytes\n",
 			port->port_num, tty, count);
 
@@ -991,6 +995,10 @@ static int gs_put_char(struct tty_struct *tty, unsigned char ch)
 	unsigned long	flags;
 	int		status;
 
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	if(!port)
+		return 0;
+#endif
 	pr_vdebug("gs_put_char: (%d,%p) char=0x%x, called from %p\n",
 		port->port_num, tty, ch, __builtin_return_address(0));
 
@@ -1006,6 +1014,10 @@ static void gs_flush_chars(struct tty_struct *tty)
 	struct gs_port	*port = tty->driver_data;
 	unsigned long	flags;
 
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	if(!port)
+		return;
+#endif
 	pr_vdebug("gs_flush_chars: (%d,%p)\n", port->port_num, tty);
 
 	spin_lock_irqsave(&port->port_lock, flags);
@@ -1020,6 +1032,10 @@ static int gs_write_room(struct tty_struct *tty)
 	unsigned long	flags;
 	int		room = 0;
 
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	if(!port)
+		return room;
+#endif
 	spin_lock_irqsave(&port->port_lock, flags);
 	if (port->port_usb)
 		room = gs_buf_space_avail(&port->port_write_buf);

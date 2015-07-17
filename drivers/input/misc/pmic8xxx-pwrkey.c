@@ -45,12 +45,19 @@ static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 	struct pmic8xxx_pwrkey *pwrkey = _pwrkey;
 
 	if (pwrkey->press == true) {
+#ifdef CONFIG_MACH_LGE
+		printk("[key][exception] power key pressed when already pressed\n");
+#else
 		pwrkey->press = false;
+#endif
 		return IRQ_HANDLED;
 	} else {
 		pwrkey->press = true;
 	}
 
+#ifdef CONFIG_MACH_LGE
+	printk("[key] power key pressed\n");
+#endif
 	input_report_key(pwrkey->pwr, KEY_POWER, 1);
 	input_sync(pwrkey->pwr);
 
@@ -64,11 +71,18 @@ static irqreturn_t pwrkey_release_irq(int irq, void *_pwrkey)
 	if (pwrkey->press == false) {
 		input_report_key(pwrkey->pwr, KEY_POWER, 1);
 		input_sync(pwrkey->pwr);
+#ifdef CONFIG_MACH_LGE
+		printk("[key][exception] power key release when not pressed\n");
+#else
 		pwrkey->press = true;
+#endif
 	} else {
 		pwrkey->press = false;
 	}
 
+#ifdef CONFIG_MACH_LGE
+	printk("[key] power key released\n");
+#endif
 	input_report_key(pwrkey->pwr, KEY_POWER, 0);
 	input_sync(pwrkey->pwr);
 

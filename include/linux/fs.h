@@ -23,7 +23,16 @@
 
 /* Fixed constants first: */
 #undef NR_OPEN
+#ifdef CONFIG_MACH_LGE
+/* LGE_CHANGE: Increase INR_OPEN_CUR to 2048
+ * This change is temporary before fixing fd leak in android
+ * TODO: It should be removed.
+ * 2012-04-04, bongkyu.kim@lge.com
+ */
+#define INR_OPEN_CUR 2048	/* Initial setting for nfile rlimits */
+#else
 #define INR_OPEN_CUR 1024	/* Initial setting for nfile rlimits */
+#endif
 #define INR_OPEN_MAX 4096	/* Hard limit for nfile rlimits */
 
 #define BLOCK_SIZE_BITS 10

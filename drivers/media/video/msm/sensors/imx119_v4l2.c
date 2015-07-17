@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -36,7 +36,14 @@ static struct msm_camera_i2c_reg_conf imx119_groupoff_settings[] = {
 };
 
 static struct msm_camera_i2c_reg_conf imx119_prev_settings[] = {
-	{0x0101, 0x03}, /* read out direction */
+/* LGE_CHANGE_S, Rotation for L1v and L1m, 2012-07-03, sunkyoo.hwang@lge.com */
+#if defined(CONFIG_MACH_MSM8960_L1)
+	{0x0101, 0x00},
+#else
+	{0x0101, 0x03},
+#endif
+/* LGE_CHANGE_E, Rotation for L1v and L1m, 2012-07-03, sunkyoo.hwang@lge.com */
+
 	{0x0340, 0x04},
 	{0x0341, 0x28},
 	{0x0346, 0x00},
@@ -82,15 +89,19 @@ static struct msm_camera_i2c_reg_conf imx119_recommend_settings[] = {
 	{0x308C, 0x00},
 	{0x302E, 0x8C},
 	{0x302F, 0x81},
+/* LGE_CHANGE
+ * Fix the rotaion issue for Recorded moive on Windows.
+ * 2012-01-13, soojung.lim@lge.com
+ */
 	{0x0101, 0x03},
 };
 
 static struct v4l2_subdev_info imx119_subdev_info[] = {
 	{
-	.code = V4L2_MBUS_FMT_SBGGR10_1X10,
+	.code   = V4L2_MBUS_FMT_SBGGR10_1X10,
 	.colorspace = V4L2_COLORSPACE_JPEG,
-	.fmt = 1,
-	.order = 0,
+	.fmt    = 1,
+	.order    = 0,
 	},
 	/* more can be supported, to be added later */
 };
@@ -113,32 +124,8 @@ static struct msm_sensor_output_info_t imx119_dimensions[] = {
 		.frame_length_lines = 0x432,
 		.vt_pixel_clk = 45600000,
 		.op_pixel_clk = 45600000,
+		.binning_factor = 1,
 	},
-};
-
-static struct msm_camera_csid_vc_cfg imx119_cid_cfg[] = {
-	{0, CSI_RAW10, CSI_DECODE_10BIT},
-	{1, CSI_EMBED_DATA, CSI_DECODE_8BIT},
-	{2, CSI_RESERVED_DATA_0, CSI_DECODE_8BIT},
-};
-
-static struct msm_camera_csi2_params imx119_csi_params = {
-	.csid_params = {
-		.lane_assign = 0xe4,
-		.lane_cnt = 1,
-		.lut_params = {
-			.num_cid = 3,
-			.vc_cfg = imx119_cid_cfg,
-		},
-	},
-	.csiphy_params = {
-		.lane_cnt = 1,
-		.settle_cnt = 0x1B,
-	},
-};
-
-static struct msm_camera_csi2_params *imx119_csi_params_array[] = {
-	&imx119_csi_params,
 };
 
 static struct msm_sensor_output_reg_addr_t imx119_reg_addr = {
@@ -167,7 +154,7 @@ static const struct i2c_device_id imx119_i2c_id[] = {
 
 static struct i2c_driver imx119_i2c_driver = {
 	.id_table = imx119_i2c_id,
-	.probe = msm_sensor_i2c_probe,
+	.probe  = msm_sensor_i2c_probe,
 	.driver = {
 		.name = SENSOR_NAME,
 	},
@@ -192,7 +179,7 @@ static struct v4l2_subdev_video_ops imx119_subdev_video_ops = {
 
 static struct v4l2_subdev_ops imx119_subdev_ops = {
 	.core = &imx119_subdev_core_ops,
-	.video = &imx119_subdev_video_ops,
+	.video  = &imx119_subdev_video_ops,
 };
 
 static struct msm_sensor_fn_t imx119_func_tbl = {
@@ -202,14 +189,18 @@ static struct msm_sensor_fn_t imx119_func_tbl = {
 	.sensor_group_hold_off = msm_sensor_group_hold_off,
 	.sensor_set_fps = msm_sensor_set_fps,
 	.sensor_write_exp_gain = msm_sensor_write_exp_gain1,
+/* LGE_CHANGE_S, add snapshot exp gain, 2012-03-14, chaehee.lim@lge.com */
 	.sensor_write_snapshot_exp_gain = msm_sensor_write_exp_gain1,
+/* LGE_CHANGE_E, add snapshot exp gain, 2012-03-14, chaehee.lim@lge.com */
 	.sensor_setting = msm_sensor_setting,
+	.sensor_csi_setting = msm_sensor_setting1,
 	.sensor_set_sensor_mode = msm_sensor_set_sensor_mode,
 	.sensor_mode_init = msm_sensor_mode_init,
 	.sensor_get_output_info = msm_sensor_get_output_info,
 	.sensor_config = msm_sensor_config,
 	.sensor_power_up = msm_sensor_power_up,
 	.sensor_power_down = msm_sensor_power_down,
+	.sensor_adjust_frame_lines = msm_sensor_adjust_frame_lines1,
 	.sensor_get_csi_params = msm_sensor_get_csi_params,
 };
 
@@ -222,7 +213,8 @@ static struct msm_sensor_reg_t imx119_regs = {
 	.group_hold_on_conf = imx119_groupon_settings,
 	.group_hold_on_conf_size = ARRAY_SIZE(imx119_groupon_settings),
 	.group_hold_off_conf = imx119_groupoff_settings,
-	.group_hold_off_conf_size = ARRAY_SIZE(imx119_groupoff_settings),
+	.group_hold_off_conf_size =
+		ARRAY_SIZE(imx119_groupoff_settings),
 	.init_settings = &imx119_init_conf[0],
 	.init_size = ARRAY_SIZE(imx119_init_conf),
 	.mode_settings = &imx119_confs[0],
@@ -238,7 +230,6 @@ static struct msm_sensor_ctrl_t imx119_s_ctrl = {
 	.sensor_id_info = &imx119_id_info,
 	.sensor_exp_gain_info = &imx119_exp_gain_info,
 	.cam_mode = MSM_SENSOR_MODE_INVALID,
-	.csi_params = &imx119_csi_params_array[0],
 	.msm_sensor_mutex = &imx119_mut,
 	.sensor_i2c_driver = &imx119_i2c_driver,
 	.sensor_v4l2_subdev_info = imx119_subdev_info,
@@ -250,4 +241,3 @@ static struct msm_sensor_ctrl_t imx119_s_ctrl = {
 module_init(msm_sensor_init_module);
 MODULE_DESCRIPTION("Sony 1.3MP Bayer sensor driver");
 MODULE_LICENSE("GPL v2");
-

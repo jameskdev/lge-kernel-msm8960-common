@@ -111,6 +111,11 @@ static void init_watchdog_work(struct work_struct *work);
 static DECLARE_DELAYED_WORK(dogwork_struct, pet_watchdog_work);
 static DECLARE_WORK(init_dogwork_struct, init_watchdog_work);
 
+#ifdef CONFIG_MACH_LGE
+extern uint32_t get_raw_revision(void);
+extern unsigned int system_rev;
+#endif
+
 /* Called from the FIQ bark handler */
 void msm_wdog_bark_fin(void)
 {
@@ -274,6 +279,11 @@ void pet_watchdog(void)
 static void pet_watchdog_work(struct work_struct *work)
 {
 	pet_watchdog();
+
+#ifdef CONFIG_MACH_LGE
+	printk(">>>%s [system rev: %d][raw ver: %d]\n",
+		    __FUNCTION__, system_rev, get_raw_revision());
+#endif	
 
 	if (enable)
 		schedule_delayed_work_on(0, &dogwork_struct, delay_time);

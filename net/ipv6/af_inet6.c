@@ -219,7 +219,9 @@ lookup_protocol:
 	np->hop_limit	= -1;
 	np->mcast_hops	= IPV6_DEFAULT_MCASTHOPS;
 	np->mc_loop	= 1;
+// LGE_DATA_CHANGE_S, [120925_COM_0042], http://dev.lge.com/wiki/datacop/patch_0042
 	np->pmtudisc	= IPV6_PMTUDISC_WANT;
+// LGE_DATA_CHANGE_E, [120925_COM_0042], http://dev.lge.com/wiki/datacop/patch_0042
 	np->ipv6only	= net->ipv6.sysctl.bindv6only;
 
 	/* Init the ipv4 part of the socket since we can have sockets

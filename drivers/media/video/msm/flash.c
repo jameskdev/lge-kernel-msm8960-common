@@ -466,7 +466,7 @@ error:
 				i2c_client.addr_type = MSM_CAMERA_I2C_BYTE_ADDR;
 				rc = msm_camera_i2c_write(&i2c_client, 0x01,
 					0x46, MSM_CAMERA_I2C_BYTE_DATA);
-				flash_wq = alloc_workqueue("my_queue",WQ_MEM_RECLAIM,1);
+				flash_wq = create_workqueue("my_queue");
 				work = (struct flash_work *)kmalloc(sizeof(struct flash_work), GFP_KERNEL);
 				INIT_WORK( (struct work_struct *)work, flash_wq_function );
 				setup_timer(&flash_timer, flash_timer_callback, 0);
@@ -792,6 +792,13 @@ int msm_strobe_flash_ctrl(struct msm_camera_sensor_strobe_flash_data *sfdata,
 	return rc;
 }
 
+/* LGE_CHANGE
+ * 2011-09-01, seojin.lee@lge.com
+ */
+#ifdef CONFIG_MSM_CAMERA_FLASH_LM3559
+extern int lm3559_flash_set_led_state(int state);
+#endif
+
 int msm_flash_ctrl(struct msm_camera_sensor_info *sdata,
 	struct flash_ctrl_data *flash_info)
 {
@@ -799,8 +806,18 @@ int msm_flash_ctrl(struct msm_camera_sensor_info *sdata,
 	sensor_data = sdata;
 	switch (flash_info->flashtype) {
 	case LED_FLASH:
+/* LGE_CHANGE
+ * Support LM3559.
+ * 2011-09-01, seojin.lee@lge.com
+ */
+#ifdef CONFIG_MSM_CAMERA_FLASH_LM3559
+		rc = lm3559_flash_set_led_state(flash_info->ctrl_data.led_state);
+		CDBG("%s: lm3559_flash_set_led_state rc = %d\n", __func__, rc);
+#else
 		rc = msm_camera_flash_set_led_state(sdata->flash_data,
 			flash_info->ctrl_data.led_state);
+#endif
+
 			break;
 	case STROBE_FLASH:
 		rc = msm_strobe_flash_ctrl(sdata->strobe_flash_data,

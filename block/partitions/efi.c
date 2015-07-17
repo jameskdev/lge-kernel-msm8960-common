@@ -549,11 +549,18 @@ static int find_valid_gpt(struct parsed_partitions *state, gpt_header **gpt,
 
 	good_pgpt = is_gpt_valid(state, GPT_PRIMARY_PARTITION_TABLE_LBA,
 				 &pgpt, &pptes);
-        if (good_pgpt)
-		good_agpt = is_gpt_valid(state,
-					 le64_to_cpu(pgpt->alternate_lba),
-					 &agpt, &aptes);
-        if (!good_agpt && force_gpt)
+        if (good_pgpt) 
+#ifdef CONFIG_LGE_LASTLBA_BACKUPGPT
+			good_agpt = is_gpt_valid(state,
+						 le64_to_cpu(lastlba),
+						 &agpt, &aptes);
+#else
+			good_agpt = is_gpt_valid(state,
+						 le64_to_cpu(pgpt->alternate_lba),
+						 &agpt, &aptes);
+#endif
+		
+        if (!good_agpt && force_gpt) 
                 good_agpt = is_gpt_valid(state, lastlba, &agpt, &aptes);
 
         /* The obviously unsuccessful case */

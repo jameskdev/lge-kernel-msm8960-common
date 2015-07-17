@@ -1,0 +1,32 @@
+config BOARD_HEADER_FILE
+	string "LGE board specific header file name"
+	default ""
+
+config MACH_MSM8960_VU2
+	depends on ARCH_MSM8960
+	select MACH_LGE
+	bool "MSM8960 VU2"
+	help
+	  Support for the LGE MSM8960 VU2 device.
+
+choice
+	depends on MACH_MSM8960_VU2
+	prompt "VU2 Board Selection"
+	default MACH_MSM8960_VU2SK
+
+config MACH_MSM8960_VU2SK
+        bool "MSM8960 VU2SK"
+        help
+          Support for the LGE MSM8960 VU2SK device.
+		  
+config MACH_MSM8960_VU2KT
+        bool "MSM8960 VU2KT"
+        help
+          Support for the LGE MSM8960 VU2KT device.
+          
+config MACH_MSM8960_VU2U
+        bool "MSM8960 VU2U"
+        help
+          Support for the LGE MSM8960 VU2U device.
+
+endchoice

@@ -23,6 +23,7 @@
 #include <linux/hwmon.h>
 #include <linux/module.h>
 #include <linux/debugfs.h>
+#include <linux/wakelock.h>
 #include <linux/interrupt.h>
 #include <linux/completion.h>
 #include <linux/hwmon-sysfs.h>
@@ -143,6 +144,10 @@ struct pm8xxx_adc {
 	uint32_t				mpp_base;
 	struct device				*hwmon;
 	struct msm_xo_voter			*adc_voter;
+#ifdef CONFIG_LGE_PM
+	/* 120422 mansu.lee add adc fail workaround wake lock */
+	struct wake_lock			adc_workaround_wakelock;
+#endif
 	int					msm_suspend_check;
 	struct pm8xxx_adc_amux_properties	*conv;
 	struct pm8xxx_adc_arb_btm_param		batt;
@@ -705,7 +710,11 @@ uint32_t pm8xxx_adc_read(enum pm8xxx_adc_channels channel,
 	}
 
 	mutex_lock(&adc_pmic->adc_lock);
-
+#ifdef CONFIG_LGE_PM
+	/* 120422 mansu.lee@lge.com add adc fail workaround wake lock */
+	wake_lock(&adc_pmic->adc_workaround_wakelock);
+	/* 120422 mansu.lee@lge.com */
+#endif
 	for (i = 0; i < adc_pmic->adc_num_board_channel; i++) {
 		if (channel == adc_pmic->adc_channel[i].channel_name)
 			break;
@@ -791,7 +800,11 @@ uint32_t pm8xxx_adc_read(enum pm8xxx_adc_channels channel,
 		rc = -EINVAL;
 		goto fail_unlock;
 	}
-
+#ifdef CONFIG_LGE_PM
+	/* 120422 mansu.lee@lge.com add adc fail workaround wake lock */
+	wake_unlock(&adc_pmic->adc_workaround_wakelock);
+	/* 120422 mansu.lee@lge.com */
+#endif
 	mutex_unlock(&adc_pmic->adc_lock);
 
 	return 0;
@@ -800,6 +813,11 @@ fail:
 	if (rc_fail)
 		pr_err("pm8xxx adc power disable failed\n");
 fail_unlock:
+#ifdef CONFIG_LGE_PM
+	/* 120422 mansu.lee@lge.com add adc fail workaround wake lock */
+	wake_unlock(&adc_pmic->adc_workaround_wakelock);
+	/* 120422 mansu.lee@lge.com */
+#endif
 	mutex_unlock(&adc_pmic->adc_lock);
 	pr_err("pm8xxx adc error with %d\n", rc);
 	return rc;
@@ -1271,6 +1289,12 @@ static int __devinit pm8xxx_adc_probe(struct platform_device *pdev)
 
 	disable_irq_nosync(adc_pmic->btm_cool_irq);
 	platform_set_drvdata(pdev, adc_pmic);
+#ifdef CONFIG_LGE_PM
+	/* 120422 mansu.lee@lge.com add adc fail workaround wake lock */
+	wake_lock_init(&adc_pmic->adc_workaround_wakelock, WAKE_LOCK_SUSPEND,
+					"pm8xxx_adc_workaround");
+	/* 120422 mansu.lee@lge.com */
+#endif
 	adc_pmic->msm_suspend_check = 0;
 	pmic_adc = adc_pmic;
 

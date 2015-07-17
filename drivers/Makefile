@@ -126,8 +126,11 @@ obj-y				+= ieee802154/
 #common clk code
 obj-y				+= clk/
 
+#FeliCa
+obj-$(CONFIG_LGE_FELICA) 	+= felica/
+
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
-obj-$(CONFIG_NFC)		+= nfc/
+obj-$(CONFIG_LGE_NFC_PN544)	+= nfc/
 obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
 obj-$(CONFIG_REMOTEPROC)	+= remoteproc/
 obj-$(CONFIG_RPMSG)		+= rpmsg/
@@ -140,5 +143,8 @@ obj-$(CONFIG_PM_DEVFREQ)	+= devfreq/
 
 #MobiCore
 obj-$(CONFIG_MOBICORE_SUPPORT)  += gud/
+
+#TDMB
+obj-$(CONFIG_LGE_BROADCAST_TDMB) += broadcast/
 
 obj-$(CONFIG_CORESIGHT)		+= coresight/

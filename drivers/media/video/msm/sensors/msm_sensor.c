@@ -17,6 +17,32 @@
 #include "msm_ispif.h"
 #include "msm_camera_i2c_mux.h"
 
+#undef CDBG
+#define CDBG pr_err
+
+#ifdef CONFIG_MACH_MSM8960_L1v
+#define LGIT_IEF_SWITCH_L1V
+
+#ifdef LGIT_IEF_SWITCH_L1V
+extern int mipi_lgd_lcd_ief_off(void);
+extern int mipi_lgd_lcd_ief_on(void);
+#endif
+#endif
+
+/* LGE_CHANGE_S, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
+#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_FB_MSM_MIPI_LGIT_VIDEO_HD_PT) || defined(CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT)
+#define LGIT_IEF_SWITCH_VU2
+
+#ifdef LGIT_IEF_SWITCH_VU2
+extern int mipi_lgit_lcd_ief_off(void);
+extern int mipi_lgit_lcd_ief_on(void);
+#endif
+#endif
+#endif
+/* LGE_CHANGE_E, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
+
+
 /*=============================================================*/
 void msm_sensor_adjust_frame_lines1(struct msm_sensor_ctrl_t *s_ctrl)
 {
@@ -93,7 +119,8 @@ static void msm_sensor_delay_frames(struct msm_sensor_ctrl_t *s_ctrl)
 		else
 			delay = (1000 * s_ctrl->wait_num_frames) / fps / Q10;
 	}
-	CDBG("%s fps = %ld, delay = %d, min_delay %d\n", __func__, fps,
+
+	pr_err("%s fps = %ld, delay = %d, min_delay %d\n", __func__, fps,
 		delay, s_ctrl->min_delay);
 	if (delay > s_ctrl->min_delay)
 		msleep(delay);
@@ -156,6 +183,13 @@ int32_t msm_sensor_write_output_settings(struct msm_sensor_ctrl_t *s_ctrl,
 	return rc;
 }
 
+/* LGE_CHANGE_S, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
+#ifdef LGIT_IEF_SWITCH_VU2
+extern int sub_cam_id_for_keep_screen_on;
+#endif
+/* LGE_CHANGE_E, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
+
+
 void msm_sensor_start_stream(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	if (s_ctrl->curr_res >= s_ctrl->msm_sensor_reg->num_conf)
@@ -171,10 +205,31 @@ void msm_sensor_start_stream(struct msm_sensor_ctrl_t *s_ctrl)
 		s_ctrl->msm_sensor_reg->start_stream_conf_size,
 		s_ctrl->msm_sensor_reg->default_data_type);
 	msleep(20);
+
+
+/* LGE_CHANGE_S, Turn IEF off in camera mode, 2012-10-23 */
+#ifdef LGIT_IEF_SWITCH_L1V
+       if(system_state != SYSTEM_BOOTING){
+               printk("[IEF_OFF] Camera \n");
+               mipi_lgd_lcd_ief_off();
+       }
+#endif
+/* LGE_CHANGE_E, Turn IEF off in camera mode, 2012-10-23 */
+
+/* LGE_CHANGE_S, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
+#ifdef LGIT_IEF_SWITCH_VU2
+       if(system_state != SYSTEM_BOOTING && sub_cam_id_for_keep_screen_on != -2733) {
+               printk("[IEF_OFF] Camera \n");
+               mipi_lgit_lcd_ief_off();
+       }
+#endif
+/* LGE_CHANGE_E, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
+
 }
 
 void msm_sensor_stop_stream(struct msm_sensor_ctrl_t *s_ctrl)
 {
+	pr_err("%s: E\n", __func__); /* LGE_CHANGE, For debugging, 2012-07-03, sunkyoo.hwang@lge.com */
 	msm_camera_i2c_write_tbl(
 		s_ctrl->sensor_i2c_client,
 		s_ctrl->msm_sensor_reg->stop_stream_conf,
@@ -336,7 +391,7 @@ int32_t msm_sensor_mode_init(struct msm_sensor_ctrl_t *s_ctrl,
 	s_ctrl->fps_divider = Q10;
 	s_ctrl->cam_mode = MSM_SENSOR_MODE_INVALID;
 
-	CDBG("%s: %d\n", __func__, __LINE__);
+	pr_err("%s: E: %d\n", __func__, __LINE__); /* LGE_CHANGE, For debugging, 2012-07-03, sunkyoo.hwang@lge.com */
 	if (mode != s_ctrl->cam_mode) {
 		s_ctrl->curr_res = MSM_SENSOR_INVALID_RES;
 		s_ctrl->cam_mode = mode;
@@ -349,6 +404,8 @@ int32_t msm_sensor_mode_init(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = s_ctrl->func_tbl->sensor_setting(s_ctrl,
 				MSM_SENSOR_REG_INIT, 0);
 	}
+
+	pr_err("%s: X: %d\n", __func__, __LINE__); /* LGE_CHANGE, For debugging, 2012-07-03, sunkyoo.hwang@lge.com */
 	return rc;
 }
 
@@ -368,7 +425,7 @@ int32_t msm_sensor_get_output_info(struct msm_sensor_ctrl_t *s_ctrl,
 
 static int32_t msm_sensor_release(struct msm_sensor_ctrl_t *s_ctrl)
 {
-	CDBG("%s called\n", __func__);
+	pr_err("%s called\n", __func__);
 	s_ctrl->func_tbl->sensor_stop_stream(s_ctrl);
 	return 0;
 }
@@ -426,8 +483,6 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 		sizeof(struct sensor_cfg_data)))
 		return -EFAULT;
 	mutex_lock(s_ctrl->msm_sensor_mutex);
-	CDBG("%s:%d %s cfgtype = %d\n", __func__, __LINE__,
-		s_ctrl->sensordata->sensor_name, cdata.cfgtype);
 	switch (cdata.cfgtype) {
 		case CFG_SET_FPS:
 		case CFG_SET_PICT_FPS:
@@ -492,9 +547,41 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 					cdata.mode,
 					cdata.rs);
 			break;
+// LGE_CHNAGE_S sungsik.kim 2012/11/07 {
+// for YUV sensor[JB]
+#ifdef CONFIG_MACH_LGE
+		case CFG_SET_WB:
+			   rc = s_ctrl->func_tbl->
+				       sensor_set_wb(
+				               s_ctrl,
+				               cdata.cfg.wb_val);
+			   break;
 
 		case CFG_SET_EFFECT:
-			break;
+			   rc = s_ctrl->func_tbl->
+				       sensor_set_effect(
+				               s_ctrl,
+				               cdata.cfg.effect);
+				break;
+
+		case CFG_SET_BRIGHTNESS:
+				rc = s_ctrl->func_tbl->
+				       sensor_set_brightness(
+				               s_ctrl,
+				               cdata.cfg.brightness);
+			   break;
+		case CFG_SET_SOC_FPS:
+			   rc = s_ctrl->func_tbl->
+				       sensor_set_soc_minmax_fps(
+				               s_ctrl,
+				               cdata.cfg.fps_range.minfps,
+				               cdata.cfg.fps_range.maxfps);
+				break;
+#else
+		case CFG_SET_EFFECT:
+			   break;
+#endif
+// LGE_CHNAGE_E sungsik.kim 2012/11/07 }
 
 		case CFG_HDR_UPDATE:
 			if (s_ctrl->func_tbl->
@@ -538,6 +625,24 @@ int32_t msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 				rc = -EFAULT;
 			break;
 
+		//Start :randy@qualcomm.com for calibration 2012.03.25
+		case CFG_GET_CALIB_DATA:
+		pr_err("__debug: %s: %d: CFG_GET_CALIB_DATA\n", __func__, __LINE__);
+			if (s_ctrl->func_tbl->sensor_get_eeprom_data
+				== NULL) {
+				rc = -EFAULT;
+				break;
+			}
+			rc = s_ctrl->func_tbl->sensor_get_eeprom_data(
+				s_ctrl,
+				&cdata);
+
+			if (copy_to_user((void *)argp,
+				&cdata,
+				sizeof(cdata)))
+				rc = -EFAULT;
+			break;
+		//End :randy@qualcomm.com for calibration 2012.03.25
 		case CFG_START_STREAM:
 			if (s_ctrl->func_tbl->sensor_start_stream == NULL) {
 				rc = -EFAULT;
@@ -626,6 +731,9 @@ int32_t msm_sensor_enable_i2c_mux(struct msm_camera_i2c_conf *i2c_conf)
 		VIDIOC_MSM_I2C_MUX_INIT, NULL);
 	v4l2_subdev_call(i2c_mux_sd, core, ioctl,
 		VIDIOC_MSM_I2C_MUX_CFG, (void *)&i2c_conf->i2c_mux_mode);
+
+	pr_err("%s\n", __func__);
+
 	return 0;
 }
 
@@ -1487,6 +1595,7 @@ int32_t msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	int32_t rc = 0;
 	struct msm_camera_sensor_info *data = s_ctrl->sensordata;
 	struct device *dev = NULL;
+	pr_err("%s: E: %s\n", __func__, data->sensor_name); /* LGE_CHANGE, For debugging, 2012-07-03, sunkyoo.hwang@lge.com */
 	if (s_ctrl->sensor_device_type == MSM_SENSOR_PLATFORM_DEVICE)
 		dev = &s_ctrl->pdev->dev;
 	else
@@ -1567,6 +1676,8 @@ int32_t msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 		data->sensor_platform_info->i2c_conf->use_i2c_mux)
 		msm_sensor_enable_i2c_mux(data->sensor_platform_info->i2c_conf);
 
+	pr_err("%s: X\n", __func__); /* LGE_CHANGE, For debugging, 2012-07-03, sunkyoo.hwang@lge.com */
+
 	if (s_ctrl->sensor_device_type == MSM_SENSOR_PLATFORM_DEVICE) {
 		rc = msm_sensor_cci_util(s_ctrl->sensor_i2c_client,
 			MSM_CCI_INIT);
@@ -1611,6 +1722,7 @@ int32_t msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	struct msm_camera_sensor_info *data = s_ctrl->sensordata;
 	struct device *dev = NULL;
+	pr_err("%s: E: %s\n", __func__, data->sensor_name); /* LGE_CHANGE, For debugging, 2012-07-03, sunkyoo.hwang@lge.com */
 	if (s_ctrl->sensor_device_type == MSM_SENSOR_PLATFORM_DEVICE)
 		dev = &s_ctrl->pdev->dev;
 	else
@@ -1619,6 +1731,25 @@ int32_t msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 		msm_sensor_cci_util(s_ctrl->sensor_i2c_client,
 			MSM_CCI_RELEASE);
 	}
+
+/* LGE_CHANGE_S, Turn IEF off in camera mode, 2012-10-23 */
+#ifdef LGIT_IEF_SWITCH_L1V
+       if(system_state != SYSTEM_BOOTING){
+               printk("[IEF_ON] Camera \n");
+               mipi_lgd_lcd_ief_on();
+       }
+#endif
+/* LGE_CHANGE_E, Turn IEF off in camera mode, 2012-10-23*/
+
+/* LGE_CHANGE_S, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
+#ifdef LGIT_IEF_SWITCH_VU2
+       sub_cam_id_for_keep_screen_on = -1;
+       if(system_state != SYSTEM_BOOTING){
+               printk("[IEF_ON] Camera \n");
+               mipi_lgit_lcd_ief_on();
+       }
+#endif
+/* LGE_CHANGE_E, Turn IEF off in camera mode except KeepScreenOn, 2012-09-13, jeongda.lee@lge.com */
 
 	if (data->sensor_platform_info->i2c_conf &&
 		data->sensor_platform_info->i2c_conf->use_i2c_mux)
@@ -1648,6 +1779,7 @@ int32_t msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 		s_ctrl->reg_ptr, 0);
 	msm_camera_request_gpio_table(data, 0);
 	kfree(s_ctrl->reg_ptr);
+	pr_err("%s: X\n", __func__); /* LGE_CHANGE, For debugging, 2012-07-03, sunkyoo.hwang@lge.com */
 	s_ctrl->curr_res = MSM_SENSOR_INVALID_RES;
 	return 0;
 }
@@ -1666,6 +1798,7 @@ int32_t msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		return rc;
 	}
 
+	pr_err("msm_sensor id: %d\n", chipid);
 	CDBG("%s: read id: %x expected id %x:\n", __func__, chipid,
 		s_ctrl->sensor_id_info->sensor_id);
 	if (chipid != s_ctrl->sensor_id_info->sensor_id) {
@@ -1680,7 +1813,7 @@ int32_t msm_sensor_i2c_probe(struct i2c_client *client,
 {
 	int rc = 0;
 	struct msm_sensor_ctrl_t *s_ctrl;
-	CDBG("%s %s_i2c_probe called\n", __func__, client->name);
+	pr_err("%s %s_i2c_probe called\n", __func__, client->name);
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		pr_err("%s %s i2c_check_functionality failed\n",
 			__func__, client->name);

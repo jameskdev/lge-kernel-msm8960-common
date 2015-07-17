@@ -139,7 +139,7 @@ static long media_device_enum_links(struct media_device *mdev,
 		unsigned int p;
 
 		for (p = 0; p < entity->num_pads; p++) {
-			struct media_pad_desc pad = {0};
+			struct media_pad_desc pad;
 			media_device_kpad_to_upad(&entity->pads[p], &pad);
 			if (copy_to_user(&links.pads[p], &pad, sizeof(pad)))
 				return -EFAULT;
@@ -210,12 +210,18 @@ static long media_device_setup_link(struct media_device *mdev,
 	return ret;
 }
 
+/* LGE_CHANGE_S, dr.ryu@lge.com, 2012-08-02, KeepScreenOn*/
+int sub_cam_id_for_keep_screen_on = -1;
+/* LGE_CHANGE_E, dr.ryu@lge.com, 2012-08-02, KeepScreenOn*/
 static long media_device_ioctl(struct file *filp, unsigned int cmd,
 			       unsigned long arg)
 {
 	struct media_devnode *devnode = media_devnode_data(filp);
 	struct media_device *dev = to_media_device(devnode);
 	long ret;
+/* LGE_CHANGE_S, dr.ryu@lge.com, 2012-08-02, KeepScreenOn*/
+	void __user *argp = (void __user *)arg;
+/* LGE_CHANGE_E, dr.ryu@lge.com, 2012-08-02, KeepScreenOn*/
 
 	switch (cmd) {
 	case MEDIA_IOC_DEVICE_INFO:
@@ -242,6 +248,17 @@ static long media_device_ioctl(struct file *filp, unsigned int cmd,
 		mutex_unlock(&dev->graph_mutex);
 		break;
 
+/* LGE_CHANGE_S, dr.ryu@lge.com, 2012-08-02, KeepScreenOn*/
+	case MEDIA_IOC_SUB_CAM_ID:
+		if (copy_from_user(&sub_cam_id_for_keep_screen_on, argp, sizeof(sub_cam_id_for_keep_screen_on))) {
+			//pr_err("==============> dr.ryu %s MEDIA_IOC_SUB_CAM_ID : error\n", __func__);
+			ret = -EFAULT;
+		} else {
+			//pr_err("==============> dr.ryu %s : MEDIA_IOC_SUB_CAM_ID : SET sub_cam_id_for_keep_screen_on : %d\n", __func__, sub_cam_id_for_keep_screen_on);
+			ret = 0;
+		}
+		break;
+/* LGE_CHANGE_E, dr.ryu@lge.com, 2012-08-02, KeepScreenOn*/
 	default:
 		ret = -ENOIOCTLCMD;
 	}

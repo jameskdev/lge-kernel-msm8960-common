@@ -73,6 +73,10 @@ enum battery_type {
 	BATT_UNKNOWN = 0,
 	BATT_PALLADIUM,
 	BATT_DESAY,
+#ifdef CONFIG_LGE_PM
+	BATT_LGCHEM,
+	BATT_PANASONIC,
+#endif /* CONFIG_LGE_PM */	
 };
 
 /**

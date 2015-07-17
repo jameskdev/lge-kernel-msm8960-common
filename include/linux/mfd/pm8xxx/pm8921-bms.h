@@ -89,9 +89,34 @@ struct pm8921_bms_platform_data {
 	int				high_ocv_correction_limit_uv;
 	int				low_ocv_correction_limit_uv;
 	int				hold_soc_est;
+/* LGE_UPDATE_S [dongwon.choi] 2013-01-10
+ * @first_fixed_iavg_ma:	fixed iavg should be used first boot time
+ * @shutdown_soc_threshold:	if shutdown soc is low than this threshold
+ * 							than ignore shutdown soc */
+#ifdef CONFIG_LGE_PM
+	int				first_fixed_iavg_ma;
+	int				shutdown_soc_threshold;
+#endif /* CONFIG_LGE_PM */
+/* LGE_UPDATE_E */	
 };
 
 #if defined(CONFIG_PM8921_BMS) || defined(CONFIG_PM8921_BMS_MODULE)
+/* 2012-04-28 Lx-battery-informaion
+L0 4.3V LGC_BL44JH_1700_data
+L0 4.2V LGC_BL44JS_1700_data
+L1 4.3V LGC_BL53QH_2000_data
+*/
+#if defined(CONFIG_LGE_PM)
+extern struct bms_battery_data  LGC_BL53QH_2000_data;
+extern struct bms_battery_data  LGC_BL44JH_1700_data;
+extern struct bms_battery_data  LGC_BL44JS_1700_data;
+extern struct bms_battery_data  LGC_BL54SH_2500_data;
+extern struct bms_battery_data  SANYO_BL54SH_2500_data;
+#if defined (CONFIG_MACH_MSM8960_L1v)
+extern struct bms_battery_data LGE_L1_VZW_LG_CHEM_BL_data;
+extern struct bms_battery_data LGE_L1_VZW_Tocad_Dongwha_BL_data;
+#endif
+#endif
 /**
  * pm8921_bms_get_vsense_avg - return the voltage across the sense
  *				resitor in microvolts

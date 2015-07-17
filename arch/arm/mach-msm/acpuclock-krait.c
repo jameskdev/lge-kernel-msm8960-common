@@ -38,6 +38,14 @@
 #include "acpuclock.h"
 #include "acpuclock-krait.h"
 #include "avs.h"
+#ifdef CONFIG_MACH_LGE
+#include "smd_private.h"
+/* LGE_CHANGE support factory process without battery, taehung.kim@lge.com*/
+#include <mach/board_lge.h>
+#define LT_CABLE_56K                6
+#define LT_CABLE_130K               7
+#define LT_CABLE_910K		    11
+#endif
 
 /* MUX source selects. */
 #define PRI_SRC_SEL_SEC_SRC	0
@@ -936,7 +944,7 @@ static void __init cpufreq_table_init(void)
 		int i, freq_cnt = 0;
 		/* Construct the freq_table tables from acpu_freq_tbl. */
 		for (i = 0; drv.acpu_freq_tbl[i].speed.khz != 0
-				&& freq_cnt < ARRAY_SIZE(*freq_table)-1; i++) {
+				&& freq_cnt < ARRAY_SIZE(*freq_table); i++) {
 			if (drv.acpu_freq_tbl[i].use_for_scaling) {
 				freq_table[cpu][freq_cnt].index = freq_cnt;
 				freq_table[cpu][freq_cnt].frequency
@@ -1071,8 +1079,10 @@ static int __init get_pvs_bin(u32 pte_efuse)
 	return pvs_bin;
 }
 
+
 static struct pvs_table * __init select_freq_plan(u32 pte_efuse_phys,
 			struct pvs_table (*pvs_tables)[NUM_PVS])
+
 {
 	void __iomem *pte_efuse;
 	u32 pte_efuse_val, tbl_idx, bin_idx;
@@ -1098,6 +1108,14 @@ static void __init drv_data_init(struct device *dev,
 {
 	struct pvs_table *pvs;
 
+#ifdef CONFIG_MACH_LGE	
+	struct pvs_table *lge_pvs;
+	unsigned int *smem_ptr;
+	unsigned int smem_size;
+	unsigned int cable_info;	
+	/* LGE_CHANGE support factory process without battery, taehung.kim@lge.com*/
+	enum lge_boot_mode_type boot_mode=lge_get_boot_mode();
+#endif
 	drv.dev = dev;
 	drv.scalable = kmemdup(params->scalable, params->scalable_size,
 				GFP_KERNEL);
@@ -1121,11 +1139,40 @@ static void __init drv_data_init(struct device *dev,
 
 	pvs = select_freq_plan(params->pte_efuse_phys, params->pvs_tables);
 	BUG_ON(!pvs->table);
+#ifdef CONFIG_MACH_LGE	
+	lge_pvs = select_freq_plan(params->pte_efuse_phys, params->pvs_tables_lge_factory);
+	BUG_ON(!lge_pvs);//WBT_FIX
+	BUG_ON(!lge_pvs->table);
+	smem_ptr = (unsigned int *)smem_get_entry(SMEM_ID_VENDOR1, &smem_size);
+    if (smem_ptr == NULL){
+		smem_size = 0;
+		cable_info = 0;
+    }else {
+		cable_info = *smem_ptr;
+    }
+	if((boot_mode == LGE_BOOT_MODE_FACTORY2 || boot_mode == LGE_BOOT_MODE_PIFBOOT) && ((cable_info == LT_CABLE_130K)
+#ifdef CONFIG_MACH_MSM8960_FX1		
+		|| (cable_info == LT_CABLE_56K) || (cable_info == LT_CABLE_910K)
+#endif	
+		))
+	{
+	    drv.acpu_freq_tbl = kmemdup(lge_pvs->table, lge_pvs->size, GFP_KERNEL);
+	    BUG_ON(!drv.acpu_freq_tbl);
+	    drv.boost_uv = lge_pvs->boost_uv;
+		}
+	else
+	{
+	    drv.acpu_freq_tbl = kmemdup(pvs->table, pvs->size, GFP_KERNEL);
+	    BUG_ON(!drv.acpu_freq_tbl);
+	    drv.boost_uv = pvs->boost_uv;
+	}
+#else
 
 	drv.acpu_freq_tbl = kmemdup(pvs->table, pvs->size, GFP_KERNEL);
 	BUG_ON(!drv.acpu_freq_tbl);
 	drv.boost_uv = pvs->boost_uv;
 
+#endif
 	acpuclk_krait_data.power_collapse_khz = params->stby_khz;
 	acpuclk_krait_data.wait_for_irq_khz = params->stby_khz;
 }

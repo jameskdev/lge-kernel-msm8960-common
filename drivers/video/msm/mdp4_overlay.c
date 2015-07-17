@@ -107,6 +107,13 @@ struct mdp4_overlay_ctrl {
 static DEFINE_MUTEX(iommu_mutex);
 static struct mdp4_overlay_ctrl *ctrl = &mdp4_overlay_db;
 
+#if defined(CONFIG_LGE_BROADCAST_TDMB)
+static int dmb_status = 0; // on - 1, off - 0
+int mdp4_set_dmb_status(int flag) {
+	dmb_status = flag;
+	return 0;
+}
+#endif /* LGE_BROADCAST */
 struct mdp4_overlay_perf {
 	u32 mdp_clk_rate;
 	u32 use_ov_blt[MDP4_MIXER_MAX];
@@ -133,8 +140,12 @@ void  mdp4_overlay_free_base_pipe(struct msm_fb_data_type *mfd)
 			mdp4_dsi_cmd_free_base_pipe(mfd);
 		else if (ctrl->panel_mode & MDP4_PANEL_LCDC)
 			mdp4_lcdc_free_base_pipe(mfd);
+#ifndef CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT
+#ifndef CONFIG_FB_MSM_MIPI_LGIT_VIDEO_HD_PT_PANEL
 	} else if (hdmi_prim_display || mfd->index == 1) {
 		mdp4_dtv_free_base_pipe(mfd);
+#endif		
+#endif
 	}
 }
 
@@ -149,9 +160,9 @@ static int mdp4_map_sec_resource(struct msm_fb_data_type *mfd)
 		return -ENODEV;
 	}
 
-	pr_debug("%s %d mfd->index=%d,mapped=%d,active=%d\n",
+	pr_debug("%s %d mfd->index=%d,mapped=%d\n",
 		__func__, __LINE__,
-		 mfd->index, mfd->sec_mapped, mfd->sec_active);
+		 mfd->index, mfd->sec_mapped);
 
 	if (mfd->sec_mapped)
 		return 0;
@@ -174,18 +185,32 @@ static int mdp4_map_sec_resource(struct msm_fb_data_type *mfd)
 int mdp4_unmap_sec_resource(struct msm_fb_data_type *mfd)
 {
 	int ret = 0;
+	int i, sec_cnt = 0;
+	struct mdp4_overlay_pipe *pipe;
+
+	pr_debug("mdp4_unmap_sec_resource\n");
 
 	if (!mfd) {
 		pr_err("%s: mfd is invalid\n", __func__);
 		return -ENODEV;
 	}
 
-	if ((mfd->sec_mapped == 0) || (mfd->sec_active))
+	if (mfd->sec_mapped == 0)
 		return 0;
 
-	pr_debug("%s %d mfd->index=%d,mapped=%d,active=%d\n",
+	for (i = 0; i < OVERLAY_PIPE_MAX; i++) {
+		pipe = &ctrl->plist[i];
+		if ((pipe->mixer_num == mfd->index) &&
+				pipe->flags & MDP_SECURE_OVERLAY_SESSION)
+			sec_cnt++;
+	}
+
+	if (sec_cnt)
+		return 0;
+
+	pr_debug("%s %d mfd->index=%d,mapped=%d\n",
 		__func__, __LINE__,
-		 mfd->index, mfd->sec_mapped, mfd->sec_active);
+		 mfd->index, mfd->sec_mapped);
 
 	ret = mdp_enable_iommu_clocks();
 	if (ret) {
@@ -319,8 +344,6 @@ int mdp4_overlay_iommu_map_buf(int mem_id,
 	struct ion_handle **srcp_ihdl)
 {
 	struct mdp4_iommu_pipe_info *iom;
-	unsigned long size = 0, map_size = 0;
-	int ret;
 
 	if (!display_iclient)
 		return -EINVAL;
@@ -334,32 +357,13 @@ int mdp4_overlay_iommu_map_buf(int mem_id,
 	pr_debug("mixer %u, pipe %u, plane %u\n", pipe->mixer_num,
 		pipe->pipe_ndx, plane);
 
-	if(mdp4_overlay_format2type(pipe->src_format) == OVERLAY_TYPE_RGB) {
-		ret = ion_handle_get_size(display_iclient, *srcp_ihdl, &size);
-		if (ret)
-			pr_err("ion_handle_get_size failed with ret %d\n", ret);
-		map_size = mdp_iommu_max_map_size;
-		if(map_size < size)
-			map_size = size;
-
-		if (ion_map_iommu(display_iclient, *srcp_ihdl,
-				DISPLAY_READ_DOMAIN, GEN_POOL, SZ_4K, map_size, start,
-				len, 0, 0)) {
-			ion_free(display_iclient, *srcp_ihdl);
-			pr_err("%s(): ion_map_iommu() failed\n",
-					__func__);
-			return -EINVAL;
-		}
-	} else {
-
-		if (ion_map_iommu(display_iclient, *srcp_ihdl,
-				DISPLAY_READ_DOMAIN, GEN_POOL, SZ_4K, 0, start,
-				len, 0, 0)) {
-			ion_free(display_iclient, *srcp_ihdl);
-			pr_err("%s(): ion_map_iommu() failed\n",
-					__func__);
-			return -EINVAL;
-		}
+	if (ion_map_iommu(display_iclient, *srcp_ihdl,
+			DISPLAY_READ_DOMAIN, GEN_POOL, SZ_4K, 0, start,
+			len, 0, 0)) {
+		ion_free(display_iclient, *srcp_ihdl);
+		pr_err("%s(): ion_map_iommu() failed\n",
+				__func__);
+		return -EINVAL;
 	}
 	mutex_lock(&iommu_mutex);
 	iom = &pipe->iommu;
@@ -845,6 +849,24 @@ void mdp4_overlay_rgb_setup(struct mdp4_overlay_pipe *pipe)
 	mask = 0xFFFEFFFF;
 	pipe->op_mode = (pipe->op_mode & mask) | (curr & ~mask);
 
+/* [START] 20120208 force FLIP_MODE for INVERSE PANEL - kyunghoo.ryu@lge.com */
+#if defined(CONFIG_FB_MSM_MIPI_LGIT_CMD_WVGA_INVERSE_PT_PANEL) || \
+	defined(CONFIG_FB_MSM_MIPI_LGIT_VIDEO_WVGA_INVERSE_PT_PANEL)
+	if (panel_rotate_180 && (pipe->pipe_num == OVERLAY_PIPE_RGB1 || pipe->pipe_num == OVERLAY_PIPE_RGB2))
+	{
+		local_op_mode = pipe->op_mode | MDP4_OP_FLIP_UD | MDP4_OP_SCALEY_EN;
+
+		if (pipe->ext_flag & MDP_FLIP_UD)
+			local_op_mode &= ~MDP4_OP_FLIP_UD;
+	}
+
+	if ((local_op_mode & MDP4_OP_FLIP_UD) && pipe->mfd)
+		dst_xy = (((pipe->mfd->panel_info.yres - pipe->dst_y - pipe->dst_h) << 16) | pipe->dst_x);
+
+	if (!pipe->mfd)
+		pr_err("rgb mfd is not set\n");
+#endif
+
 	outpdw(rgb_base + 0x0000, src_size);	/* MDP_RGB_SRC_SIZE */
 	outpdw(rgb_base + 0x0004, src_xy);	/* MDP_RGB_SRC_XY */
 	outpdw(rgb_base + 0x0008, dst_size);	/* MDP_RGB_DST_SIZE */
@@ -963,7 +985,11 @@ void mdp4_overlay_vg_setup(struct mdp4_overlay_pipe *pipe)
 	char *vg_base;
 	uint32 frame_size, src_size, src_xy, dst_size, dst_xy;
 	uint32 format, pattern, luma_offset, chroma_offset;
+#if defined (CONFIG_LGE_BROADCAST_TDMB)
+	uint32 mask, curr, addr;
+#else /* LGE_BROADCAST */
 	uint32 mask;
+#endif /* LGE_BROADCAST */
 	int pnum, ptype, i;
 	uint32_t block;
 
@@ -1060,6 +1086,28 @@ void mdp4_overlay_vg_setup(struct mdp4_overlay_pipe *pipe)
 		mdp4_overlay_vg_get_src_offset(pipe, vg_base, &luma_offset,
 			&chroma_offset);
 	}
+#if defined (CONFIG_LGE_BROADCAST_TDMB)
+	/* Ensure proper covert matrix loaded when color space swaps */
+	curr = inpdw(vg_base + 0x0058);
+	mask = 0x600;
+
+	if ((curr & mask) != (pipe->op_mode & mask)) {
+		addr = ((uint32_t)vg_base) + 0x4000;
+		if (ptype != OVERLAY_TYPE_RGB)
+		{
+			if(dmb_status ==1) {
+				mdp4_csc_write(&dmb_csc_convert, addr);
+			} else {
+				mdp4_csc_write(&(mdp_csc_convert[1]), addr);
+			}
+		}
+		mask = 0xFFFCFFFF;
+	} else {
+		/* updates in real time video display color tunnung csc table for tdmb */
+		mask = 0xFFFCF1FF;
+	}
+	pipe->op_mode = (pipe->op_mode & mask) | (curr & ~mask);
+#endif /* LGE_BROADCAST*/
 
 	/* luma component plane */
 	outpdw(vg_base + 0x0010, pipe->srcp0_addr + luma_offset);
@@ -2746,11 +2794,6 @@ static int mdp4_overlay_req2pipe(struct mdp_overlay *req, int mixer,
 
 	pipe->transp = req->transp_mask;
 
-	if ((pipe->flags & MDP_SECURE_OVERLAY_SESSION) &&
-		(!(req->flags & MDP_SECURE_OVERLAY_SESSION))) {
-		pr_err("%s Switch secure %d", __func__, pipe->pipe_ndx);
-		mfd->sec_active = FALSE;
-	}
 	pipe->flags = req->flags;
 
 	*ppipe = pipe;
@@ -2839,13 +2882,16 @@ static int mdp4_calc_req_mdp_clk(struct msm_fb_data_type *mfd,
 	pr_debug("%s: the right %d shifted xscale is %d.\n",
 		 __func__, shift, xscale);
 
-	if (src_h > dst_h)
-	        yscale = src_h;
-	else
-                yscale = dst_h;
+	if (src_h > dst_h) {
+		yscale = src_h;
+		yscale <<= shift;
+		yscale /= dst_h;
+	} else {		/* upscale */
+		yscale = dst_h;
+		yscale <<= shift;
+		yscale /= src_h;
+	}
 
-        yscale <<= shift;
-        yscale /= dst_h;
 	yscale *= src_w;
 	yscale /= hsync;
 
@@ -2884,7 +2930,11 @@ static int mdp4_calc_req_mdp_clk(struct msm_fb_data_type *mfd,
 	 * factor. Ideally this factor is passed from board file.
 	 */
 	if (rst < pclk) {
+#if defined(CONFIG_MACH_MSM8960_FX1SK) || defined(CONFIG_MACH_MSM8960_VU2)
+		rst = ((pclk >> shift) * 26 / 20) << shift;
+#else
 		rst = ((pclk >> shift) * 23 / 20) << shift;
+#endif
 		pr_debug("%s calculated mdp clk is less than pclk.\n",
 			__func__);
 	}
@@ -3551,7 +3601,6 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 
 	if (pipe->flags & MDP_SECURE_OVERLAY_SESSION) {
 		mdp4_map_sec_resource(mfd);
-		mfd->sec_active = TRUE;
 	}
 
 	/* return id back to user */
@@ -3667,8 +3716,6 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 
 	mdp4_stat.overlay_unset[pipe->mixer_num]++;
 
-	if (pipe->flags & MDP_SECURE_OVERLAY_SESSION)
-		mfd->sec_active = FALSE;
 	mdp4_overlay_pipe_free(pipe, 0);
 
 	mutex_unlock(&mfd->dma->ov_mutex);

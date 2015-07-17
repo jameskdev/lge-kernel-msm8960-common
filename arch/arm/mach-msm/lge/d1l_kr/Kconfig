@@ -1,0 +1,30 @@
+
+config MACH_MSM8960_D1L_KR
+	depends on ARCH_MSM8960
+	select MACH_LGE
+	bool "MSM8960 D1L_KR"
+	help
+	  Support for the LGE MSM8960 D1L device.
+
+choice
+	depends on MACH_MSM8960_D1L_KR
+	prompt "D1L Board Selection"
+	default MACH_MSM8960_D1LSK
+
+config MACH_MSM8960_D1LSK
+	bool "MSM8960 D1L SKT"
+	help
+	  Support for the LGE MSM8960 D1L SKT device.
+
+config MACH_MSM8960_D1LKT
+	bool "MSM8960 D1L KT"
+	help
+	  Support for the LGE MSM8960 D1L KT device.
+
+config MACH_MSM8960_D1LU
+	bool "MSM8960 D1L LGU+"
+	help
+	  Support for the LGE MSM8960 D1L LGU+ device.
+
+endchoice
+

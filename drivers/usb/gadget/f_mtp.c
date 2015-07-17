@@ -50,7 +50,11 @@
 #define STATE_ERROR                 4   /* error from completion routine */
 
 /* number of tx and rx requests to allocate */
+#ifdef CONFIG_MACH_MSM8960_VU2
+#define MTP_TX_REQ_MAX 8
+#else
 #define TX_REQ_MAX 4
+#endif
 #define RX_REQ_MAX 2
 #define INTR_REQ_MAX 5
 
@@ -67,8 +71,20 @@
 #define MTP_RESPONSE_OK             0x2001
 #define MTP_RESPONSE_DEVICE_BUSY    0x2019
 
+#ifdef CONFIG_MACH_MSM8960_VU2
+unsigned int mtp_rx_req_len = 65536;
+#else
 unsigned int mtp_rx_req_len = MTP_BULK_BUFFER_SIZE;
+#endif
 module_param(mtp_rx_req_len, uint, S_IRUGO | S_IWUSR);
+
+#ifdef CONFIG_MACH_MSM8960_VU2
+unsigned int mtp_tx_req_len = MTP_BULK_BUFFER_SIZE;
+module_param(mtp_tx_req_len, uint, S_IRUGO | S_IWUSR);
+
+unsigned int mtp_tx_reqs = 16;
+module_param(mtp_tx_reqs, uint, S_IRUGO | S_IWUSR);
+#endif
 
 static const char mtp_shortname[] = "mtp_usb";
 
@@ -249,6 +265,40 @@ struct mtp_ext_config_desc_function {
 	__u8	reserved[6];
 };
 
+#ifdef NOT_CONFIG_USB_G_LGE_ANDROID
+/* LGE_CHANGE
+ * MS Ext Desciptor for MTP and adb (to use in testing driver).
+ * NOTE: this remains for reference code about MTP setting with ADB enabled.
+ * Therefore we do not use this officially(so NOT_ prefix is used).
+ * 2011-02-09, hyunhui.park@lge.com
+ */
+
+/* MTP Extended Configuration Descriptor */
+struct {
+	struct mtp_ext_config_desc_header	header;
+	struct mtp_ext_config_desc_function    function;
+	struct mtp_ext_config_desc_function    adb_function;
+} mtp_ext_config_desc = {
+	.header = {
+		.dwLength = __constant_cpu_to_le32(sizeof(mtp_ext_config_desc)),
+		.bcdVersion = __constant_cpu_to_le16(0x0100),
+		.wIndex = __constant_cpu_to_le16(4),
+		/* It has two functions (mtp, adb) */
+		.bCount = __constant_cpu_to_le16(2),
+	},
+	.function = {
+		.bFirstInterfaceNumber = 0,
+		.bInterfaceCount = 1,
+		.compatibleID = { 'M', 'T', 'P' },
+	},
+	/* adb */
+	.adb_function = {
+		.bFirstInterfaceNumber = 1,
+		.bInterfaceCount = 1,
+	},
+};
+
+#else /* This is Google Original */
 /* MTP Extended Configuration Descriptor */
 struct {
 	struct mtp_ext_config_desc_header	header;
@@ -266,6 +316,7 @@ struct {
 		.compatibleID = { 'M', 'T', 'P' },
 	},
 };
+#endif
 
 struct mtp_device_status {
 	__le16	wLength;
@@ -422,14 +473,45 @@ static int mtp_create_bulk_endpoints(struct mtp_dev *dev,
 	ep->driver_data = dev;		/* claim the endpoint */
 	dev->ep_intr = ep;
 
+#ifdef CONFIG_MACH_MSM8960_VU2
+retry_tx_alloc:
+	if (mtp_tx_req_len > MTP_BULK_BUFFER_SIZE)
+		mtp_tx_reqs = 4;
+
+	/* now allocate requests for our endpoints */
+	for (i = 0; i < mtp_tx_reqs; i++) {
+		req = mtp_request_new(dev->ep_in, mtp_tx_req_len);
+		if (!req) {
+			if (mtp_tx_req_len <= MTP_BULK_BUFFER_SIZE)
+				goto fail;
+			while ((req = mtp_req_get(dev, &dev->tx_idle)))
+				mtp_request_free(req, dev->ep_in);
+			mtp_tx_req_len = MTP_BULK_BUFFER_SIZE;
+			mtp_tx_reqs = MTP_TX_REQ_MAX;
+			goto retry_tx_alloc;
+		}
+#else
 	/* now allocate requests for our endpoints */
 	for (i = 0; i < TX_REQ_MAX; i++) {
 		req = mtp_request_new(dev->ep_in, MTP_BULK_BUFFER_SIZE);
 		if (!req)
 			goto fail;
+#endif
 		req->complete = mtp_complete_in;
 		mtp_req_put(dev, &dev->tx_idle, req);
 	}
+
+#ifdef CONFIG_MACH_MSM8960_VU2
+	/*
+	 * The RX buffer should be aligned to EP max packet for
+	 * some controllers.  At bind time, we don't know the
+	 * operational speed.  Hence assuming super speed max
+	 * packet size.
+	 */
+	if (mtp_rx_req_len % 1024)
+		mtp_rx_req_len = MTP_BULK_BUFFER_SIZE;
+#endif
+
 retry_rx_alloc:
 	for (i = 0; i < RX_REQ_MAX; i++) {
 		req = mtp_request_new(dev->ep_out, mtp_rx_req_len);
@@ -466,13 +548,24 @@ static ssize_t mtp_read(struct file *fp, char __user *buf,
 	struct usb_composite_dev *cdev = dev->cdev;
 	struct usb_request *req;
 	int r = count, xfer;
+#ifdef CONFIG_MACH_MSM8960_VU2
+	int len;
+#endif
 	int ret = 0;
 
 	DBG(cdev, "mtp_read(%d)\n", count);
 
+#ifdef CONFIG_MACH_MSM8960_VU2
+	if (!dev->ep_out)
+		return -EINVAL;
+	len = ALIGN(count, dev->ep_out->maxpacket);
+
+	if (len > mtp_rx_req_len)
+		return -EINVAL;
+#else
 	if (count > mtp_rx_req_len)
 		return -EINVAL;
-
+#endif
 	/* we will block until we're online */
 	DBG(cdev, "mtp_read: waiting for online state\n");
 	ret = wait_event_interruptible(dev->read_wq,
@@ -494,7 +587,11 @@ static ssize_t mtp_read(struct file *fp, char __user *buf,
 requeue_req:
 	/* queue a request */
 	req = dev->rx_req[0];
+#ifdef CONFIG_MACH_MSM8960_VU2
+	req->length = len;
+#else
 	req->length = count;
+#endif
 	dev->rx_done = 0;
 	ret = usb_ep_queue(dev->ep_out, req, GFP_KERNEL);
 	if (ret < 0) {
@@ -598,9 +695,13 @@ static ssize_t mtp_write(struct file *fp, const char __user *buf,
 			r = ret;
 			break;
 		}
-
+#ifdef CONFIG_MACH_MSM8960_VU2
+		if (count > mtp_tx_req_len)
+			xfer = mtp_tx_req_len;
+#else
 		if (count > MTP_BULK_BUFFER_SIZE)
 			xfer = MTP_BULK_BUFFER_SIZE;
+#endif
 		else
 			xfer = count;
 		if (xfer && copy_from_user(req->buf, buf, xfer)) {
@@ -691,9 +792,13 @@ static void send_file_work(struct work_struct *data)
 			r = ret;
 			break;
 		}
-
+#ifdef CONFIG_MACH_MSM8960_VU2
+		if (count > mtp_tx_req_len)
+			xfer = mtp_tx_req_len;
+#else
 		if (count > MTP_BULK_BUFFER_SIZE)
 			xfer = MTP_BULK_BUFFER_SIZE;
+#endif
 		else
 			xfer = count;
 
@@ -761,15 +866,18 @@ static void receive_file_work(struct work_struct *data)
 	count = dev->xfer_file_length;
 
 	DBG(cdev, "receive_file_work(%lld)\n", count);
-
 	while (count > 0 || write_req) {
 		if (count > 0) {
 			/* queue a request */
 			read_req = dev->rx_req[cur_buf];
 			cur_buf = (cur_buf + 1) % RX_REQ_MAX;
-
+#ifdef CONFIG_MACH_MSM8960_VU2
+			/* some h/w expects size to be aligned to ep's MTU */
+			read_req->length = mtp_rx_req_len;
+#else
 			read_req->length = (count > mtp_rx_req_len
 					? mtp_rx_req_len : count);
+#endif
 			dev->rx_done = 0;
 			ret = usb_ep_queue(dev->ep_out, read_req, GFP_KERNEL);
 			if (ret < 0) {
@@ -805,6 +913,12 @@ static void receive_file_work(struct work_struct *data)
 					usb_ep_dequeue(dev->ep_out, read_req);
 				break;
 			}
+#ifdef CONFIG_MACH_MSM8960_VU2
+			/* Check if we aligned the size due to MTU constraint */
+			if (count < read_req->length)
+				read_req->actual = (read_req->actual > count ?
+						count : read_req->actual);
+#endif
 			/* if xfer_file_length is 0xFFFFFFFF, then we read until
 			 * we get a zero length packet
 			 */
@@ -1042,7 +1156,7 @@ static int mtp_ctrlrequest(struct usb_composite_dev *cdev,
 		DBG(cdev, "class request: %d index: %d value: %d length: %d\n",
 			ctrl->bRequest, w_index, w_value, w_length);
 
-		if (ctrl->bRequest == MTP_REQ_CANCEL && w_index == 0
+		if (ctrl->bRequest == MTP_REQ_CANCEL && (w_index == 0 || w_index == 3)
 				&& w_value == 0) {
 			DBG(cdev, "MTP_REQ_CANCEL\n");
 
@@ -1060,7 +1174,7 @@ static int mtp_ctrlrequest(struct usb_composite_dev *cdev,
 			 */
 			value = w_length;
 		} else if (ctrl->bRequest == MTP_REQ_GET_DEVICE_STATUS
-				&& w_index == 0 && w_value == 0) {
+				&& (w_index == 0 || w_index == 3) && w_value == 0) {
 			struct mtp_device_status *status = cdev->req->buf;
 			status->wLength =
 				__constant_cpu_to_le16(sizeof(*status));
@@ -1110,6 +1224,11 @@ mtp_function_bind(struct usb_configuration *c, struct usb_function *f)
 		return id;
 	mtp_interface_desc.bInterfaceNumber = id;
 	mtp_ext_config_desc.function.bFirstInterfaceNumber = id;
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	/* for ptp & MS desc */
+	ptp_interface_desc.bInterfaceNumber = id;
+
+#endif
 
 	/* allocate endpoints */
 	ret = mtp_create_bulk_endpoints(dev, &mtp_fullspeed_in_desc,

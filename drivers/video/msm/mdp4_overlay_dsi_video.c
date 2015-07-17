@@ -35,6 +35,7 @@
 #include "mdp4.h"
 #include "mipi_dsi.h"
 
+#include "mipi_lgit.h"
 #include <mach/iommu_domains.h>
 
 #define DSI_VIDEO_BASE	0xE0000
@@ -96,7 +97,11 @@ static void vsync_irq_disable(int intr, int term)
 	pr_debug("%s: IRQ-dis done, term=%x\n", __func__, term);
 }
 
+#ifdef CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT
+void mdp4_overlay_dsi_video_start(void)
+#else
 static void mdp4_overlay_dsi_video_start(void)
+#endif
 {
 	if (!dsi_video_enabled) {
 		/* enable DSI block */
@@ -630,6 +635,10 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	} else {
 		pipe = vctrl->base_pipe;
 	}
+#if defined(CONFIG_FB_MSM_MIPI_LGIT_CMD_WVGA_INVERSE_PT_PANEL) || \
+	defined(CONFIG_FB_MSM_MIPI_LGIT_VIDEO_WVGA_INVERSE_PT_PANEL)
+	pipe->mfd = mfd;
+#endif
 
 	atomic_set(&vctrl->suspend, 0);
 
@@ -750,6 +759,10 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	return ret;
 }
 
+#if defined(CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT)||defined(CONFIG_FB_MSM_MIPI_LGIT_VIDEO_HD_PT)
+int mipi_lgit_lcd_off(struct platform_device *pdev);
+#endif
+
 int mdp4_dsi_video_off(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -761,6 +774,37 @@ int mdp4_dsi_video_off(struct platform_device *pdev)
 	unsigned long flags;
 	int mixer = 0;
 	int undx, need_wait = 0;
+/* LGE_CHANGE_S
+* for power sequence of lgit panel
+* 2012-05-28 jungbeom.shim@lge.com
+*/
+#if defined(CONFIG_FB_MSM_MIPI_LGIT_LH470WX1_VIDEO_HD_PT)||defined(CONFIG_FB_MSM_MIPI_LGIT_VIDEO_HD_PT)
+	int retry_cnt = 0;
+
+
+	do {
+
+		ret = mipi_lgit_lcd_off(pdev);
+
+
+		if (ret < 0) {
+			panel_next_off(pdev);
+			msleep(2);
+			panel_next_on(pdev);
+			msleep(5);
+			retry_cnt++;
+		}
+		else
+		{
+			// if upper routine is successed, need to initialize ret variable.
+			ret = 0;
+			break;
+		}
+	} while(retry_cnt < 10);
+	printk(KERN_INFO "%s : mipi_lgit_lcd_off retry_cnt = %d\n", __func__, retry_cnt);
+#endif
+/* LGE_CHANGE_E */
+
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
 
