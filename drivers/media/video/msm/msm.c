@@ -1430,7 +1430,7 @@ probe_fail:
 	return NULL;
 }
 
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)
 static struct v4l2_subdev *msm_eeprom_probe(
 	struct msm_eeprom_info *eeprom_info)
 {
@@ -1495,7 +1495,7 @@ int msm_sensor_register(struct v4l2_subdev *sensor_sd)
 	sdata = (struct msm_camera_sensor_info *) s_ctrl->sensordata;
 
 	pcam->act_sdev = msm_actuator_probe(sdata->actuator_info);
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)
 	pcam->eeprom_sdev = msm_eeprom_probe(sdata->eeprom_info);
 #endif
 	D("%s: pcam =0x%p\n", __func__, pcam);
@@ -1545,7 +1545,7 @@ int msm_sensor_register(struct v4l2_subdev *sensor_sd)
 		}
 	}
 
-#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2)
+#if !defined(CONFIG_MACH_MSM8960_FX1SK) && !defined(CONFIG_MACH_MSM8960_VU2) && !defined(CONFIG_MACH_MSM8960_D1L_KR)
 	if (pcam->eeprom_sdev) {
 		rc = v4l2_device_register_subdev(&pcam->v4l2_dev,
 			pcam->eeprom_sdev);
