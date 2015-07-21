@@ -44,7 +44,7 @@ static struct msm_camera_i2c_reg_conf imx111_prev_settings[] = {
 	Seperate D1L-a from others
 	2011.12.19 ku.kwon@lge.com
 	*/
-#if defined(CONFIG_MACH_MSM8960_D1LA) || defined(CONFIG_MACH_MSM8960_D1LV) || defined(CONFIG_MACH_MSM8960_FX1)//* LGE_CHANGE, add for FX1 Camer, 2012.07.10 jihyun.song */
+#if defined(CONFIG_MACH_MSM8960_D1LA) || defined(CONFIG_MACH_MSM8960_D1LV) || defined(CONFIG_MACH_MSM8960_FX1) || defined(CONFIG_MACH_MSM8960_D1L_KR)//* LGE_CHANGE, add for FX1 Camer, 2012.07.10 jihyun.song */
 	{0x0101, 0x03}, /* read out direction */
 #else
 	{0x0101, 0x00}, /* read out direction */
@@ -235,7 +235,7 @@ static struct msm_camera_i2c_reg_conf imx111_video_settings[] = {
 	Seperate D1L-a from others
 	2011.12.19 ku.kwon@lge.com
 	*/
-#if defined(CONFIG_MACH_MSM8960_D1LA) || defined(CONFIG_MACH_MSM8960_D1LV) || defined(CONFIG_MACH_MSM8960_FX1) /* LGE_CHANGE, add for FX1 Camer, 2012.07.10 jihyun.song */
+#if defined(CONFIG_MACH_MSM8960_D1LA) || defined(CONFIG_MACH_MSM8960_D1LV) || defined(CONFIG_MACH_MSM8960_FX1) || defined(CONFIG_MACH_MSM8960_D1L_KR) /* LGE_CHANGE, add for FX1 Camer, 2012.07.10 jihyun.song */
 	{0x0101, 0x03}, /* read out direction */
 #else
 	{0x0101, 0x00}, /* read out direction */
@@ -323,7 +323,7 @@ static struct msm_camera_i2c_reg_conf imx111_snap_settings[] = {
 	Seperate D1L-a from others
 	2011.12.19 ku.kwon@lge.com
 	*/
-#if defined(CONFIG_MACH_MSM8960_D1LA) || defined(CONFIG_MACH_MSM8960_D1LV) || defined(CONFIG_MACH_MSM8960_FX1) /* LGE_CHANGE, add for FX1 Camer, 2012.07.10 jihyun.song */
+#if defined(CONFIG_MACH_MSM8960_D1LA) || defined(CONFIG_MACH_MSM8960_D1LV) || defined(CONFIG_MACH_MSM8960_FX1) || defined(CONFIG_MACH_MSM8960_D1L_KR) /* LGE_CHANGE, add for FX1 Camer, 2012.07.10 jihyun.song */
 	{0x0101, 0x03}, /* read out direction */
 #else
 	{0x0101, 0x00}, /* read out direction */

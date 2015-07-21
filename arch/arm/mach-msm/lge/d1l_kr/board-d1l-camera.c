@@ -660,7 +660,8 @@ static struct msm_camera_csi_lane_params imx111_csi_lane_params = {
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_imx111 = {
-	.mount_angle	= 90,
+//	.mount_angle	= 90,
+	.mount_angle	= 270,
 	.cam_vreg = msm_8960_cam_vreg,
 	.num_vreg = ARRAY_SIZE(msm_8960_cam_vreg),
 	.gpio_conf = &msm_8960_back_cam_gpio_conf,
@@ -706,7 +707,8 @@ static struct msm_camera_csi_lane_params imx119_csi_lane_params = {
 };
 
 static struct msm_camera_sensor_platform_info sensor_board_info_imx119 = {
-	.mount_angle	= 270,
+//	.mount_angle	= 270,
+	.mount_angle	= 90,
 	.cam_vreg = msm_8960_front_cam_vreg,
 	.num_vreg = ARRAY_SIZE(msm_8960_front_cam_vreg),
 	.gpio_conf = &msm_8960_front_cam_gpio_conf,
