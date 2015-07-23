@@ -230,6 +230,7 @@ static int msm_voip_dtx_mode_get(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
+#if !defined(CONFIG_MACH_MSM8960_D1L_KR)
 static int msm_voip_fens_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
@@ -251,6 +252,7 @@ static int msm_voip_fens_get(struct snd_kcontrol *kcontrol,
 				 MODULE_ID_VOICE_MODULE_FENS);
 	return 0;
 }
+#endif
 
 //[AUDIO_BSP] 20120213, mint.choi@lge.com, modified voip volume level for domestic models
 #if defined(CONFIG_MACH_MSM8960_D1LSK) || defined(CONFIG_MACH_MSM8960_D1LKT) || defined(CONFIG_MACH_MSM8960_D1LU) || defined(CONFIG_MACH_MSM8960_L1sk) || defined(CONFIG_MACH_MSM8960_L1kt) || defined(CONFIG_MACH_MSM8960_L1u)
