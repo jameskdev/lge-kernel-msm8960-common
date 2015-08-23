@@ -163,6 +163,9 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	fbi = mfd->fbi;
 	var = &fbi->var;
 	pinfo = &mfd->panel_info;
+#ifdef CONFIG_MACH_MSM8960_D1L_KR
+	esc_byte_ratio = pinfo->mipi.esc_byte_ratio;
+#endif
 
 	if (mipi_dsi_pdata && mipi_dsi_pdata->dsi_power_save)
 		mipi_dsi_pdata->dsi_power_save(1);
